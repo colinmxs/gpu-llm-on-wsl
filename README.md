@@ -18,23 +18,24 @@ Dockerized environment for running quantized large language models (LLMs) with G
    ```powershell
    git clone https://github.com/yourname/gpu-llm-on-wsl.git
    cd gpu-llm-on-wsl
+   ```
 
-Build the Docker image:
+2. Build the Docker image:
+   ```bash
+   docker build -t llm-docker .
+   ```
 
-docker build -t llm-docker .
+3. Run with GPU access:
+   ```bash
+   docker run --gpus all -it llm-docker
+   ```
 
-Run with GPU access:
+## Notes
 
-docker run --gpus all -it llm-docker
-
-Notes
-
-Use quantized 7B models (q4/q5) for smooth inference on 12 GB VRAM.
-
-Mount a local folder for model storage:
-
-docker run --gpus all -v C:\models:/app/models -it llm-docker
-
-Expose ports if running a web UI (e.g., -p 7860:7860).
-
-For larger models (13B+), expect slower inference and possible CPU offload.
+- Use quantized 7B models (q4/q5) for smooth inference on 12 GB VRAM.
+- Mount a local folder for model storage:
+  ```bash
+  docker run --gpus all -v C:\models:/app/models -it llm-docker
+  ```
+- Expose ports if running a web UI (e.g., `-p 7860:7860`).
+- For larger models (13B+), expect slower inference and possible CPU offload.
