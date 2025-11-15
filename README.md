@@ -49,12 +49,12 @@ This setup is optimized for local inference with popular 4-bit/8-bit quantized m
     ```
 
 3.  **Verify the environment (Recommended):**
-  Run the built-in test script to confirm that the GPU and libraries are recognized correctly.
-  ```bash
-  docker run --gpus all -it --rm llm-docker python /app/test_env.py
-  ```
-  You should see output confirming your GPU is available and listing the package versions.
-  For additional sanity checks and example inference commands, see `sanity-test.md`.
+    Run the built-in test script to confirm that the GPU and libraries are recognized correctly.
+    ```bash
+    docker run --gpus all -it --rm llm-docker python /app/test_env.py
+    ```
+    You should see output confirming your GPU is available and listing the package versions.
+    For additional sanity checks and example inference commands, see `sanity-test.md`.
 
 4.  **Run an interactive session:**
     ```bash
