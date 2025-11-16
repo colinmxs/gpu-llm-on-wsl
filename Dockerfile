@@ -58,8 +58,9 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 RUN mkdir -p /app/models /app/cache
 
-# Copy utility notebooks into the image
+# Copy utility notebooks and scripts into the image
 COPY notebooks /app/notebooks
+COPY gradio_frontend.py /app/gradio_frontend.py
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache

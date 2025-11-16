@@ -81,3 +81,44 @@ This setup is optimized for local inference with popular 4-bit/8-bit quantized m
   - download models or specific files from the Hub into `/app/models` with a simple form
 
   Open the notebook, fill in the token and model fields, and click **Download** to stage models before you start experimenting or serving them with Gradio.
+
+-   **Run the Gradio Testing Interface:**
+    Launch the interactive web interface to test all your installed models with a clean UI.
+    ```bash
+    docker run --gpus all -p 7860:7860 -v C:\path\to\models:/app/models -it llm-docker python /app/gradio_frontend.py
+    ```
+    
+    Then open your browser to `http://localhost:7860` to access the interface.
+    
+    The Gradio interface provides:
+    - **Model selection** from all downloaded models in `/app/models`
+    - **Quantization options** (4-bit, 8-bit, or full precision)
+    - **Text generation** with configurable parameters (temperature, top-p, top-k, etc.)
+    - **Interactive chat** interface for conversational testing
+    - **Real-time GPU monitoring** showing VRAM usage
+    - **Model information** displaying size, files, and configuration
+    
+    Perfect for quick testing and demos without writing code!
+
+---
+
+## Quick Reference
+
+### Download Models (via Jupyter)
+```bash
+docker run --gpus all -p 8888:8888 -v C:\path\to\models:/app/models -it llm-docker jupyter notebook --ip=0.0.0.0 --allow-root
+```
+Navigate to `notebooks/hf-model-manager.ipynb` and use the download interface.
+
+### Test Models (via Gradio)
+```bash
+docker run --gpus all -p 7860:7860 -v C:\path\to\models:/app/models -it llm-docker python /app/gradio_frontend.py
+```
+Open `http://localhost:7860` in your browser.
+
+### Interactive Python Session
+```bash
+docker run --gpus all -v C:\path\to\models:/app/models -it llm-docker
+```
+
+---
