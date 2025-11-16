@@ -51,11 +51,15 @@ RUN pip install --no-cache-dir \
     ipywidgets \
     matplotlib \
     pandas \
-    numpy
+    numpy \
+    humanize
 
 # Create working directory and model cache directory
 WORKDIR /app
 RUN mkdir -p /app/models /app/cache
+
+# Copy utility notebooks into the image
+COPY notebooks /app/notebooks
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache

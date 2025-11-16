@@ -72,5 +72,12 @@ This setup is optimized for local inference with popular 4-bit/8-bit quantized m
 -   **Run a Jupyter Notebook server:**
     Expose the Jupyter port to access it from your browser at `http://localhost:8888`.
     ```bash
-    docker run --gpus all -p 8888:8888 -it llm-docker jupyter notebook --ip=0.0.0.0 --allow-root
+    docker run --gpus all -p 8888:8888 -v C:\path\to\models:/app/models -it llm-docker jupyter notebook --ip=0.0.0.0 --allow-root
     ```
+
+  Inside the Jupyter workspace you'll find `notebooks/hf-model-manager.ipynb`, a pre-built notebook that lets you:
+
+  - securely paste and store your Hugging Face access token
+  - download models or specific files from the Hub into `/app/models` with a simple form
+
+  Open the notebook, fill in the token and model fields, and click **Download** to stage models before you start experimenting or serving them with Gradio.
