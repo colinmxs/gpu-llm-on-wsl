@@ -8,10 +8,11 @@ import os
 import gc
 from pathlib import Path
 from typing import Optional, Tuple, List
+import threading
 
 import torch
 import gradio as gr
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextIteratorStreamer
 import humanize
 
 
@@ -221,56 +222,78 @@ def generate_text(
     top_p: float,
     top_k: int,
     repetition_penalty: float
-) -> str:
-    """Generate text using the loaded model."""
+):
+    """Generate text using the loaded model with streaming."""
     global current_model, current_tokenizer, current_model_name
     
     if current_model is None or current_tokenizer is None:
-        return "⚠️ Please load a model first!"
+        yield "⚠️ Please load a model first!"
+        return
     
     if not prompt.strip():
-        return "⚠️ Please enter a prompt"
+        yield "⚠️ Please enter a prompt"
+        return
     
     try:
         # Tokenize input
         inputs = current_tokenizer(prompt, return_tensors="pt").to(current_model.device)
         
-        # Generate
+        # Setup streaming
         import time
         start_time = time.time()
         
-        with torch.inference_mode():
-            outputs = current_model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                do_sample=True,
-                pad_token_id=current_tokenizer.eos_token_id
-            )
+        streamer = TextIteratorStreamer(
+            current_tokenizer,
+            skip_prompt=False,
+            skip_special_tokens=True
+        )
+        
+        # Generation parameters
+        generation_kwargs = dict(
+            **inputs,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            do_sample=True,
+            pad_token_id=current_tokenizer.eos_token_id,
+            streamer=streamer
+        )
+        
+        # Start generation in a separate thread
+        thread = threading.Thread(target=current_model.generate, kwargs=generation_kwargs)
+        thread.start()
+        
+        # Stream the output
+        generated_text = ""
+        num_tokens = 0
+        
+        for new_text in streamer:
+            generated_text += new_text
+            num_tokens += 1
+            
+            # Yield with formatted output
+            result = f"**Generated Text:**\n\n{generated_text}"
+            yield result
+        
+        # Wait for thread to complete
+        thread.join()
         
         elapsed = time.time() - start_time
-        
-        # Decode output
-        generated_text = current_tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Calculate tokens per second
-        num_tokens = outputs.shape[1] - inputs.input_ids.shape[1]
         tokens_per_sec = num_tokens / elapsed if elapsed > 0 else 0
         
-        # Format output
+        # Final output with stats
         result = f"**Generated Text:**\n\n{generated_text}\n\n"
         result += "---\n\n"
         result += f"⏱️ **Time:** {elapsed:.2f}s | "
         result += f"📝 **Tokens:** {num_tokens} | "
         result += f"⚡ **Speed:** {tokens_per_sec:.2f} tokens/s"
         
-        return result
+        yield result
         
     except Exception as e:
-        return f"❌ Generation failed: {str(e)}"
+        yield f"❌ Generation failed: {str(e)}"
 
 
 def chat_generate(
@@ -281,15 +304,17 @@ def chat_generate(
     top_p: float,
     top_k: int,
     repetition_penalty: float
-) -> Tuple[List[Tuple[str, str]], str]:
-    """Generate response in chat interface."""
+):
+    """Generate response in chat interface with streaming."""
     global current_model, current_tokenizer, current_model_name
     
     if current_model is None or current_tokenizer is None:
-        return history + [(message, "⚠️ Please load a model first!")], ""
+        yield history + [(message, "⚠️ Please load a model first!")], ""
+        return
     
     if not message.strip():
-        return history, message
+        yield history, message
+        return
     
     try:
         # Build prompt from history
@@ -301,41 +326,57 @@ def chat_generate(
         # Tokenize
         inputs = current_tokenizer(prompt, return_tensors="pt").to(current_model.device)
         
-        # Generate
+        # Setup streaming
         import time
         start_time = time.time()
         
-        with torch.inference_mode():
-            outputs = current_model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                repetition_penalty=repetition_penalty,
-                do_sample=True,
-                pad_token_id=current_tokenizer.eos_token_id
-            )
+        streamer = TextIteratorStreamer(
+            current_tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True
+        )
+        
+        # Generation parameters
+        generation_kwargs = dict(
+            **inputs,
+            max_new_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            repetition_penalty=repetition_penalty,
+            do_sample=True,
+            pad_token_id=current_tokenizer.eos_token_id,
+            streamer=streamer
+        )
+        
+        # Start generation in a separate thread
+        thread = threading.Thread(target=current_model.generate, kwargs=generation_kwargs)
+        thread.start()
+        
+        # Stream the output
+        assistant_response = ""
+        num_tokens = 0
+        
+        for new_text in streamer:
+            assistant_response += new_text
+            num_tokens += 1
+            
+            # Yield intermediate result
+            yield history + [(message, assistant_response)], ""
+        
+        # Wait for thread to complete
+        thread.join()
         
         elapsed = time.time() - start_time
-        
-        # Decode
-        generated_text = current_tokenizer.decode(outputs[0], skip_special_tokens=True)
-        
-        # Extract assistant response (everything after the last "Assistant:")
-        assistant_response = generated_text.split("Assistant:")[-1].strip()
-        
-        # Calculate stats
-        num_tokens = outputs.shape[1] - inputs.input_ids.shape[1]
         tokens_per_sec = num_tokens / elapsed if elapsed > 0 else 0
         
-        # Add stats to response
+        # Add stats to final response
         response_with_stats = assistant_response + f"\n\n*[{num_tokens} tokens, {tokens_per_sec:.1f} tok/s, {elapsed:.2f}s]*"
         
-        return history + [(message, response_with_stats)], ""
+        yield history + [(message, response_with_stats)], ""
         
     except Exception as e:
-        return history + [(message, f"❌ Error: {str(e)}")], ""
+        yield history + [(message, f"❌ Error: {str(e)}")], ""
 
 
 def create_interface():
@@ -469,7 +510,8 @@ def create_interface():
                 top_k_gen,
                 repetition_penalty_gen
             ],
-            outputs=output_text
+            outputs=output_text,
+            show_progress="hidden"
         )
         
         msg.submit(
@@ -483,7 +525,8 @@ def create_interface():
                 top_k_chat,
                 repetition_penalty_chat
             ],
-            outputs=[chatbot, msg]
+            outputs=[chatbot, msg],
+            show_progress="hidden"
         )
         
         submit_btn.click(
@@ -497,7 +540,8 @@ def create_interface():
                 top_k_chat,
                 repetition_penalty_chat
             ],
-            outputs=[chatbot, msg]
+            outputs=[chatbot, msg],
+            show_progress="hidden"
         )
         
         clear_btn.click(
