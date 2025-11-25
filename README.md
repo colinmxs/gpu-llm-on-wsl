@@ -31,6 +31,8 @@ A Dockerized environment for running quantized large language models (LLMs) with
 2.  **Run a Command**
 
     All commands should mount a local directory to `/app/models` to persist models. Replace `C:\path\to\models` with a directory on your machine.
+    
+    **Optional:** Mount a local directory to `/app/agents` to persist agent configurations. Replace `C:\path\to\agents` with a directory on your machine.
 
     -   **Download Models (Jupyter)**: Use a notebook to download models from Hugging Face.
         ```bash
@@ -44,9 +46,15 @@ A Dockerized environment for running quantized large language models (LLMs) with
         ```
         Open `http://localhost:7860` in your browser.
 
+    -   **Agent Playground**: Build and test Strands SDK agents with a dedicated interface.
+        ```bash
+        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -it llm-docker python /app/frontend/agent_playground.py
+        ```
+        Open `http://localhost:7861` in your browser.
+    
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
-        docker run --gpus all -v C:\path\to\models:/app/models -it llm-docker
+        docker run --gpus all -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -it llm-docker
         ```
 
 ---

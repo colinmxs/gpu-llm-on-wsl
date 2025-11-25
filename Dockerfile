@@ -54,13 +54,19 @@ RUN pip install --no-cache-dir \
     numpy \
     humanize
 
+# Uncomment to install Strands SDK (replace with actual package name when available)
+# RUN pip install --no-cache-dir strands-sdk
+
 # Create working directory and model cache directory
 WORKDIR /app
-RUN mkdir -p /app/models /app/cache
+RUN mkdir -p /app/models /app/cache /app/agents
 
 # Copy utility notebooks and frontend into the image
 COPY notebooks /app/notebooks
 COPY frontend /app/frontend
+
+# Copy example agents to a reference directory (users can copy these to /app/agents)
+COPY frontend/example_agents /app/example_agents
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
@@ -87,8 +93,8 @@ if torch.cuda.is_available():\n\
 print("=" * 50)\n\
 ' > /app/test_env.py && chmod +x /app/test_env.py
 
-# Expose common ports (Jupyter: 8888, Gradio: 7860)
-EXPOSE 8888 7860
+# Expose common ports (Jupyter: 8888, Gradio: 7860, Agent Playground: 7861)
+EXPOSE 8888 7860 7861
 
 # Set the default command
 CMD ["/bin/bash"]
