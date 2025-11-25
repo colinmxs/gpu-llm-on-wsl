@@ -79,7 +79,16 @@ class ModelManager:
             Path to the model directory
         """
         safe_name = model_name.replace("/", "--")
-        return self.models_dir / safe_name
+        model_path = self.models_dir / safe_name
+        
+        # Handle Hugging Face cache structure
+        if (model_path / "snapshots").exists():
+            snapshots = list((model_path / "snapshots").iterdir())
+            if snapshots:
+                # Return the first snapshot found
+                return snapshots[0]
+                
+        return model_path
     
     def get_model_info(self, model_name: str) -> Dict[str, Any]:
         """
