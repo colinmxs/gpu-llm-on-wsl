@@ -12,7 +12,7 @@ import torch
 import gradio as gr
 
 from model_manager import ModelManager
-from agent_manager import AgentManager, AgentConfig
+from agent_manager import AgentManager
 from tool_manager import ToolManager, ToolConfig
 
 
@@ -132,20 +132,19 @@ def create_new_agent(
     # Filter out "None" from selected tools
     tools_list = [t for t in (selected_tools or []) if t != "None"]
     
-    config = AgentConfig(
+    # Use new create_agent API
+    result = agent_manager.create_agent(
         name=name.strip(),
         description=description.strip(),
         system_prompt=system_prompt.strip(),
         model_name=model_name,
+        tools=tools_list,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=top_p,
         top_k=top_k,
-        repetition_penalty=repetition_penalty,
-        tools=tools_list
+        repetition_penalty=repetition_penalty
     )
-    
-    result = agent_manager.create_agent(config)
     
     if result["success"]:
         status_msg = f"✅ {result['message']}"
@@ -188,53 +187,98 @@ def populate_agent_form(agent_name: str) -> Tuple[str, str, str, str, float, int
     if not agent_name or agent_name == "None":
         return ("", "", "", "None", 0.7, 500, 0.9, 50, 1.1, [])
     
-    config = agent_manager.get_agent_config(agent_name)
-    if not config:
+    # Get agent info from new API
+    info = agent_manager.get_agent_info(agent_name)
+    if not info.get("exists"):
         return ("", "", "", "None", 0.7, 500, 0.9, 50, 1.1, [])
     
     return (
-        config.name,
-        config.description,
-        config.system_prompt,
-        config.model_name,
-        config.temperature,
-        config.max_tokens,
-        config.top_p,
-        config.top_k,
-        config.repetition_penalty,
-        config.tools
+        info.get("name", ""),
+        info.get("description", ""),
+        info.get("system_prompt", ""),
+        info.get("model_name", "None"),
+        info.get("temperature", 0.7),
+        info.get("max_tokens", 500),
+        info.get("top_p", 0.9),
+        info.get("top_k", 50),
+        info.get("repetition_penalty", 1.1),
+        info.get("tools", [])
     )
 
 
-def chat_with_agent_handler(
-    agent_name: str,
-    message: str,
-    history: List[Tuple[str, str]]
-):
-    """Handle chat interaction with an agent."""
+def chat_with_agent_handler(message: str, history: list, agent_name: str):
+    """
+    Streaming chat handler for Strands agents.
+    Handles Strands SDK streaming response with proper event types.
+    """
+    # Validate inputs
     if not agent_name or agent_name == "None":
-        yield history + [(message, "⚠️ Please select an agent first!")], ""
+        history.append((message, "⚠️ Please select an agent first!"))
+        yield history, ""
         return
     
     if not message.strip():
         yield history, message
         return
     
+    # Initialize response tracking
     assistant_response = ""
+    metadata = {}
     
+    # Stream responses from Strands agent
     for event in agent_manager.chat_with_agent(agent_name, message, history):
-        if event["type"] == "error":
-            yield history + [(message, f"❌ {event['error']}")], ""
+        event_type = event.get("type")
+        
+        if event_type == "error":
+            # Handle errors
+            error_response = f"❌ {event.get('error', 'Unknown error')}"
+            yield history + [(message, error_response)], ""
             return
         
-        elif event["type"] == "token":
-            assistant_response = event["cumulative_text"]
+        elif event_type == "content_block_delta":
+            # Strands streaming token event
+            delta = event.get("delta", {})
+            if delta.get("type") == "text_delta":
+                token = delta.get("text", "")
+                assistant_response += token
+                yield history + [(message, assistant_response)], ""
+        
+        elif event_type == "message_complete":
+            # Final message with metadata
+            msg = event.get("message", {})
+            content = msg.get("content", [])
+            
+            # Extract text from content blocks
+            if content:
+                text_blocks = [block.get("text", "") for block in content if block.get("type") == "text"]
+                assistant_response = "".join(text_blocks)
+            
+            # Add stats if available
+            metadata = event.get("metadata", {})
+            if metadata:
+                stats = f"\n\n*[{metadata.get('total_tokens', 0)} tokens, {metadata.get('tokens_per_second', 0):.1f} tok/s, {metadata.get('elapsed_seconds', 0):.2f}s]*"
+                final_response = assistant_response + stats
+            else:
+                final_response = assistant_response
+            
+            yield history + [(message, final_response)], ""
+            return
+        
+        # Fallback for old event format (for backward compatibility)
+        elif event_type == "token":
+            assistant_response = event.get("cumulative_text", "")
             yield history + [(message, assistant_response)], ""
         
-        elif event["type"] == "complete":
-            # Add stats to final response
-            response_with_stats = event['text'] + f"\n\n*[{event['total_tokens']} tokens, {event['tokens_per_second']:.1f} tok/s, {event['elapsed_seconds']:.2f}s]*"
-            yield history + [(message, response_with_stats)], ""
+        elif event_type == "complete":
+            assistant_response = event.get("text", "")
+            stats = f"\n\n*[{event.get('total_tokens', 0)} tokens, {event.get('tokens_per_second', 0):.1f} tok/s, {event.get('elapsed_seconds', 0):.2f}s]*"
+            final_response = assistant_response + stats
+            yield history + [(message, final_response)], ""
+            return
+    
+    # Fallback if loop completes without complete event
+    if assistant_response:
+        yield history + [(message, assistant_response)], ""
 
 
 def load_model_for_agent(agent_name: str, quantization: str) -> Tuple[str, str]:
@@ -242,11 +286,12 @@ def load_model_for_agent(agent_name: str, quantization: str) -> Tuple[str, str]:
     if not agent_name or agent_name == "None":
         return "❌ Please select an agent first", ""
     
-    config = agent_manager.get_agent_config(agent_name)
-    if not config:
+    # Get agent info from new API
+    info = agent_manager.get_agent_info(agent_name)
+    if not info.get("exists"):
         return f"❌ Agent '{agent_name}' not found", ""
     
-    model_name = config.model_name
+    model_name = info.get("model_name")
     result = model_manager.load_model(model_name, quantization)
     
     status_msg = ""
@@ -375,7 +420,7 @@ def create_interface():
     model_choices = ["None"] + available_models
     active_agents = agent_manager.list_active_agents()
     
-    with gr.Blocks(title="Agent Playground", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="Agent Playground") as demo:
         gr.Markdown("# 🎮 Agent Playground")
         gr.Markdown("Build, test, and manage Strands SDK agents with custom configurations")
         
@@ -484,24 +529,24 @@ def create_interface():
                         
                         model_status = gr.Markdown("")
                         
-                        gr.Markdown("### 💬 Chat with Agent")
+                        gr.Markdown("### 💬 Chat Interface")
+                        gr.Markdown("*Simple, direct conversation with your agent*")
                         
                         chatbot = gr.Chatbot(
-                            height=400,
-                            label="Agent Response",
-                            show_label=True,
-                            type="messages"
-                        )
-                        
-                        chat_input = gr.Textbox(
-                            label="Your Message",
-                            placeholder="Type your message here...",
-                            lines=3
+                            label="Conversation",
+                            height=450
                         )
                         
                         with gr.Row():
-                            send_btn = gr.Button("📤 Send", variant="primary", size="lg")
-                            clear_chat_btn = gr.Button("🗑️ Clear Chat", variant="secondary")
+                            chat_input = gr.Textbox(
+                                label="Message",
+                                placeholder="Type your message and press Enter...",
+                                lines=2,
+                                scale=4
+                            )
+                            send_btn = gr.Button("📤 Send", variant="primary", scale=1)
+                        
+                        clear_chat_btn = gr.Button("🗑️ Clear Conversation", variant="secondary", size="sm")
                     
                     with gr.Column(scale=1):
                         gr.Markdown("## 🎮 GPU Status")
@@ -648,16 +693,14 @@ def create_interface():
         
         chat_input.submit(
             fn=chat_with_agent_handler,
-            inputs=[test_agent_selector, chat_input, chatbot],
-            outputs=[chatbot, chat_input],
-            show_progress="hidden"
+            inputs=[chat_input, chatbot, test_agent_selector],
+            outputs=[chatbot, chat_input]
         )
         
         send_btn.click(
             fn=chat_with_agent_handler,
-            inputs=[test_agent_selector, chat_input, chatbot],
-            outputs=[chatbot, chat_input],
-            show_progress="hidden"
+            inputs=[chat_input, chatbot, test_agent_selector],
+            outputs=[chatbot, chat_input]
         )
         
         clear_chat_btn.click(

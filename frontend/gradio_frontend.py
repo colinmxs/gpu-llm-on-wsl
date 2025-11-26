@@ -167,7 +167,7 @@ def generate_text(
 
 def chat_generate(
     message: str,
-    history: List[Tuple[str, str]],
+    history: list,
     max_tokens: int,
     temperature: float,
     top_p: float,
@@ -224,7 +224,7 @@ def create_interface():
     available_models = model_manager.list_models()
     model_choices = ["None"] + available_models
     
-    with gr.Blocks(title="GPU LLM Testing", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="GPU LLM Testing") as demo:
         gr.Markdown("# 🚀 GPU LLM Testing Interface")
         gr.Markdown("Test your installed language models with GPU acceleration and quantization")
         
