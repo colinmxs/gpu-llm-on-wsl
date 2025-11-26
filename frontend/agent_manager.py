@@ -345,7 +345,7 @@ class AgentManager:
         """
         Chat with an agent using Strands SDK Agent class with streaming.
         
-        Uses Strands Agent's built-in conversation management and tool execution.
+        Uses Strands Agent built-in conversation management and tool execution.
         
         Args:
             agent_name: Name of the agent to chat with
