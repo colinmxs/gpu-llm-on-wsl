@@ -15,7 +15,7 @@ from typing import Optional, Dict, Any, Generator, List, Tuple
 import sys
 
 from strands.agent import Agent
-from strands.types import Messages
+from strands.types.content import Messages
 
 # Import from shared
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))

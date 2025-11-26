@@ -8,8 +8,9 @@ full Strands Agent compatibility.
 
 from typing import Optional, Any, AsyncGenerator, Type
 from strands.models import Model
-from strands.types import Messages, ToolSpec, StreamEvent, ToolChoice
-from strands.types.content_blocks import SystemContentBlock
+from strands.types.content import Messages, SystemContentBlock
+from strands.types.tools import ToolSpec, ToolChoice
+from strands.types.streaming import StreamEvent
 from pydantic import BaseModel
 import sys
 from pathlib import Path
