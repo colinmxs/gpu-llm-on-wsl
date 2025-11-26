@@ -1,7 +1,11 @@
-# Requirements for Strands SDK Integration
+# Requirements for Strands Agents SDK Integration
 
-# Core Strands SDK
-strands>=0.1.0
+# Core Strands Agents SDK
+strands-agents>=1.0.0
+
+# Optional Strands packages
+# strands-agents-tools>=0.2.0  # Community tools package
+# strands-agents-builder  # Agent builder package
 
 # Existing dependencies (keep your current versions)
 # torch
@@ -11,5 +15,5 @@ strands>=0.1.0
 # bitsandbytes
 
 # Optional: For enhanced Strands features
-# pydantic>=2.0.0  # For structured output
+# pydantic>=2.0.0  # For structured output (included with strands-agents)
 # redis  # For Valkey/Redis session management (optional)

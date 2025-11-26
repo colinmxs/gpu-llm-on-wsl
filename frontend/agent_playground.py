@@ -489,7 +489,8 @@ def create_interface():
                         chatbot = gr.Chatbot(
                             height=400,
                             label="Agent Response",
-                            show_label=True
+                            show_label=True,
+                            type="messages"
                         )
                         
                         chat_input = gr.Textbox(
