@@ -5,7 +5,8 @@ This module provides a clean interface for managing Strands SDK agents,
 handling agent configuration, persistence, and execution independently of UI concerns.
 
 Fully Strands-native implementation using Agent class, custom Model adapter,
-and built-in conversation management.
+and built-in conversation management. Agent serialization is handled manually
+as the Agent class doesn't provide to_dict/from_dict methods.
 """
 
 import json
@@ -31,7 +32,7 @@ class AgentManager:
     
     Fully Strands-native implementation:
     - Uses Agent class properly with custom HuggingFaceLocalModel
-    - Uses Agent's built-in to_dict/from_dict for serialization
+    - Uses custom JSON serialization for persistence (Agent lacks to_dict/from_dict)
     - Uses Agent.stream_async() for chat with native tool execution
     - Maintains minimal adapter code between model_manager and Strands
     """
@@ -68,11 +69,23 @@ class AgentManager:
                 with open(agent_file, 'r') as f:
                     saved_data = json.load(f)
                 
-                # Extract model config (our custom addition)
+                # Extract model config and agent data
                 model_config = saved_data.pop("_model_config", {})
                 
-                # Reconstruct Agent using Strands from_dict
-                agent = Agent.from_dict(saved_data)
+                # Recreate model provider with saved config
+                model_provider = self._create_model_provider(model_config)
+                
+                # Prepare tools list
+                tools_list = self._prepare_tools_list(model_config.get("tools", []))
+                
+                # Reconstruct Agent manually (Agent class doesn't have from_dict)
+                agent = Agent(
+                    name=saved_data.get("name", agent_file.stem),
+                    description=saved_data.get("description", ""),
+                    system_prompt=saved_data.get("system_prompt", ""),
+                    model=model_provider,
+                    tools=tools_list
+                )
                 
                 agent_name = agent.name
                 self._agents[agent_name] = agent
@@ -80,6 +93,31 @@ class AgentManager:
                 
             except Exception as e:
                 print(f"Warning: Failed to load agent {agent_file.name}: {str(e)}")
+    
+    def _prepare_tools_list(self, tools: List[str]) -> Optional[List[str]]:
+        """
+        Convert tool names to file paths for Strands.
+        
+        Args:
+            tools: List of tool names or paths
+            
+        Returns:
+            List of tool paths or None
+        """
+        if not tools or not self.tools_dir:
+            return None
+        
+        tools_list = []
+        for tool_name in tools:
+            # Handle both tool names and full paths
+            if Path(tool_name).exists():
+                tools_list.append(str(tool_name))
+            else:
+                tool_path = self.tools_dir / f"{tool_name}.py"
+                if tool_path.exists():
+                    tools_list.append(str(tool_path))
+        
+        return tools_list if tools_list else None
     
     def _create_model_provider(self, model_config: Dict[str, Any]) -> HuggingFaceLocalModel:
         """
@@ -142,32 +180,22 @@ class AgentManager:
             if not model_name:
                 return {"success": False, "error": "Model name is required"}
             
-            # Store model configuration
+            # Store model configuration and tools
             model_config = {
                 "model_name": model_name,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
                 "top_p": top_p,
                 "top_k": top_k,
-                "repetition_penalty": repetition_penalty
+                "repetition_penalty": repetition_penalty,
+                "tools": tools or []  # Store original tool list
             }
             
             # Create model provider
             model_provider = self._create_model_provider(model_config)
             
             # Prepare tool list for Strands
-            tools_list = None
-            if tools and self.tools_dir:
-                # Convert tool names to file paths
-                tools_list = []
-                for tool_name in tools:
-                    # Handle both tool names and full paths
-                    if Path(tool_name).exists():
-                        tools_list.append(str(tool_name))
-                    else:
-                        tool_path = self.tools_dir / f"{tool_name}.py"
-                        if tool_path.exists():
-                            tools_list.append(str(tool_path))
+            tools_list = self._prepare_tools_list(tools or [])
             
             # Create Strands Agent with model provider
             agent = Agent(
@@ -201,7 +229,7 @@ class AgentManager:
     
     def save_agent(self, agent_name: str) -> Dict[str, Any]:
         """
-        Save an agent configuration to disk using Strands to_dict.
+        Save an agent configuration to disk as JSON.
         
         Args:
             agent_name: Name of the agent to save
@@ -220,11 +248,13 @@ class AgentManager:
             agent = self._agents[agent_name]
             model_config = self._agent_model_configs.get(agent_name, {})
             
-            # Use Strands built-in serialization
-            agent_dict = agent.to_dict()
-            
-            # Add our model configuration (not part of Strands Agent)
-            agent_dict["_model_config"] = model_config
+            # Manually serialize agent (Agent class doesn't have to_dict)
+            agent_dict = {
+                "name": agent.name,
+                "description": agent.description,
+                "system_prompt": agent.system_prompt,
+                "_model_config": model_config
+            }
             
             filepath = self.agents_dir / f"{agent_name}.json"
             with open(filepath, 'w') as f:
@@ -244,7 +274,7 @@ class AgentManager:
     
     def load_agent(self, agent_name: str) -> Dict[str, Any]:
         """
-        Load an agent configuration from disk using Strands from_dict.
+        Load an agent configuration from disk as JSON.
         
         Args:
             agent_name: Name of the agent to load
@@ -264,15 +294,23 @@ class AgentManager:
             with open(filepath, 'r') as f:
                 saved_data = json.load(f)
             
-            # Extract model config (our custom addition)
+            # Extract model config and agent data
             model_config = saved_data.pop("_model_config", {})
-            
-            # Reconstruct Agent using Strands from_dict
-            agent = Agent.from_dict(saved_data)
             
             # Recreate model provider with saved config
             model_provider = self._create_model_provider(model_config)
-            agent.model = model_provider
+            
+            # Prepare tools list
+            tools_list = self._prepare_tools_list(model_config.get("tools", []))
+            
+            # Reconstruct Agent manually (Agent class doesn't have from_dict)
+            agent = Agent(
+                name=saved_data.get("name", agent_name),
+                description=saved_data.get("description", ""),
+                system_prompt=saved_data.get("system_prompt", ""),
+                model=model_provider,
+                tools=tools_list
+            )
             
             # Store agent and config
             self._agents[agent_name] = agent
@@ -503,7 +541,7 @@ class AgentManager:
             "top_p": model_config.get("top_p", 0.9),
             "top_k": model_config.get("top_k", 50),
             "repetition_penalty": model_config.get("repetition_penalty", 1.1),
-            "tools": [str(t) for t in agent.tools] if agent.tools else [],
+            "tools": agent.tool_names if hasattr(agent, 'tool_names') else [],
             "is_saved": is_saved,
             "model_loaded": self.model_manager.get_current_model_name() == model_config.get("model_name"),
             "has_model_provider": agent.model is not None
