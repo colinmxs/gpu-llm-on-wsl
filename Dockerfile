@@ -62,9 +62,19 @@ RUN pip install --no-cache-dir \
 COPY requirements-strands.txt /tmp/requirements-strands.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-strands.txt
 
+# Install FastAPI and server dependencies
+COPY requirements-api.txt /tmp/requirements-api.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
+
 # Create working directory and model cache directory
 WORKDIR /app
 RUN mkdir -p /app/models /app/cache /app/agents /app/tools
+
+# Copy shared modules (used by both API and frontend)
+COPY shared /app/shared
+
+# Copy API server
+COPY api /app/api
 
 # Copy utility notebooks and frontend into the image
 COPY notebooks /app/notebooks
@@ -99,8 +109,8 @@ if torch.cuda.is_available():\n\
 print("=" * 50)\n\
 ' > /app/test_env.py && chmod +x /app/test_env.py
 
-# Expose common ports (Jupyter: 8888, Gradio: 7860, Agent Playground: 7861)
-EXPOSE 8888 7860 7861
+# Expose common ports (Jupyter: 8888, Gradio: 7860, Agent Playground: 7861, FastAPI: 8000)
+EXPOSE 8888 7860 7861 8000
 
 # Set the default command
 CMD ["/bin/bash"]

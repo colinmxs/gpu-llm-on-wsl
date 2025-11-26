@@ -12,6 +12,10 @@ from strands.types import Messages, ToolSpec, StreamEvent, ToolChoice
 from strands.types.content_blocks import SystemContentBlock
 from pydantic import BaseModel
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
 from model_manager import ModelManager
 
 

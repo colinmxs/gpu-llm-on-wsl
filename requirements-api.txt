@@ -1,0 +1,9 @@
+# FastAPI requirements for LLM Inference API
+
+# Core FastAPI and server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Additional dependencies
+pydantic==2.10.5
+python-multipart==0.0.20

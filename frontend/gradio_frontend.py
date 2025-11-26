@@ -10,6 +10,10 @@ from typing import Tuple, List
 
 import torch
 import gradio as gr
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from model_manager import ModelManager
 from templates import PROMPT_TEMPLATES

@@ -4,11 +4,7 @@ Utility functions for LLM management.
 
 from pathlib import Path
 from typing import List
-import sys
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
-
-from templates import PROMPT_TEMPLATES
+from .templates import PROMPT_TEMPLATES
 
 
 def get_model_path(model_name: str, models_dir: Path) -> Path:

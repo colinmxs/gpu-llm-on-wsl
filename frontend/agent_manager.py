@@ -15,6 +15,10 @@ from typing import Optional, Dict, Any, Generator, List, Tuple
 
 from strands.agent import Agent
 from strands.types import Messages
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from model_manager import ModelManager
 from huggingface_local_model import HuggingFaceLocalModel
