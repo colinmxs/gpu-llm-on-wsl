@@ -73,6 +73,9 @@ RUN mkdir -p /app/models /app/cache /app/agents /app/tools
 # Copy shared modules (used by both API and frontend)
 COPY shared /app/shared
 
+# Copy strands-agents module (Strands SDK integration)
+COPY strands-agents /app/strands-agents
+
 # Copy API server
 COPY api /app/api
 

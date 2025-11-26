@@ -13,11 +13,12 @@ import gradio as gr
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+# Add parent directory for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from model_manager import ModelManager
-from agent_manager import AgentManager
-from tool_manager import ToolManager, ToolConfig
+from shared.model_manager import ModelManager
+from strands_agents.agent_manager import AgentManager
+from strands_agents.tool_manager import ToolManager, ToolConfig
 
 
 # Configuration

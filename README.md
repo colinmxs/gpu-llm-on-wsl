@@ -1,7 +1,6 @@
 # GPU LLM on WSL
 
-A Dockerized environment for running quantized large language models (LLMs) with GPU acceleration on Windows via WSL2. This setup is optimized for local inference using PyTorch, Hugging Face Transformers, and `bitsandbytes`.
-
+A Dockerized environment for running quantized large language models (LLMs) with GPU acceleration on Windows via WSL2. 
 ---
 
 ## Prerequisites
