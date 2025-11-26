@@ -74,7 +74,7 @@ RUN mkdir -p /app/models /app/cache /app/agents /app/tools
 COPY shared /app/shared
 
 # Copy strands-agents module (Strands SDK integration)
-COPY strands-agents /app/strands-agents
+COPY strands_agents /app/strands_agents
 
 # Copy API server
 COPY api /app/api
@@ -83,9 +83,9 @@ COPY api /app/api
 COPY notebooks /app/notebooks
 COPY frontend /app/frontend
 
-# Copy example agents and tools to reference directories (now in strands-agents/examples)
-COPY strands-agents/examples/agents /app/example_agents
-COPY strands-agents/examples/tools /app/example_tools
+# Copy example agents and tools to reference directories (now in strands_agents/examples)
+COPY strands_agents/examples/agents /app/example_agents
+COPY strands_agents/examples/tools /app/example_tools
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
