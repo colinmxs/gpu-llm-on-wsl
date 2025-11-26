@@ -29,30 +29,34 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 &
 # Upgrade pip and install wheel
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# Install PyTorch with CUDA 12.6 support (latest stable)
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# Install PyTorch with CUDA 12.6 support - PINNED VERSIONS
+RUN pip install --no-cache-dir \
+    torch==2.9.1+cu126 \
+    torchvision==0.24.1+cu126 \
+    torchaudio==2.9.1+cu126 \
+    --index-url https://download.pytorch.org/whl/cu126
 
-# Install latest ML packages for quantized LLM inference
+# Install ML packages for quantized LLM inference - PINNED VERSIONS
 RUN pip install --no-cache-dir \
     transformers==4.57.1 \
     accelerate==1.11.0 \
     bitsandbytes==0.48.2 \
-    scipy \
-    sentencepiece \
-    protobuf \
-    einops \
-    safetensors \
-    huggingface-hub
+    scipy==1.16.3 \
+    sentencepiece==0.2.1 \
+    protobuf==6.33.1 \
+    einops==0.8.1 \
+    safetensors==0.7.0 \
+    huggingface-hub==0.36.0
 
-# Install additional utilities for model management and inference
+# Install additional utilities - PINNED VERSIONS
 RUN pip install --no-cache-dir \
-    gradio \
-    jupyter \
-    ipywidgets \
-    matplotlib \
-    pandas \
-    numpy \
-    humanize
+    gradio==6.0.1 \
+    jupyter==1.1.1 \
+    ipywidgets==8.1.8 \
+    matplotlib==3.10.7 \
+    pandas==2.3.3 \
+    numpy==2.3.3 \
+    humanize==4.14.0
 
 # Install Strands SDK and its dependencies
 COPY requirements-strands.txt /tmp/requirements-strands.txt
