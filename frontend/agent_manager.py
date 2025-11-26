@@ -49,13 +49,6 @@ class AgentManager:
     This class leverages the Strands SDK Agent class instead of reimplementing agent logic.
     It maintains configurations for persistence and creates Strands Agent instances on demand.
     """
-    
-    def __init__(self, agents_dir: Path, model_manager: ModelManager, tools_dir: Optional[Path] = None):
-        """
-        Initialize the AgentManager.
-        
-        Args:
-            agents_dir: Directory where agent configurations are stored
     def __init__(self, agents_dir: Path, model_manager: ModelManager, tools_dir: Optional[Path] = None):
         """
         Initialize the AgentManager.
@@ -77,7 +70,16 @@ class AgentManager:
         self._agent_instances: Dict[str, Agent] = {}
         
         # Auto-load all saved agent configurations at startup
-        self._load_all_agents()_file, 'r') as f:
+        self._load_all_agents()
+    
+    def _load_all_agents(self):
+        """Load all saved agent configurations from the agents directory."""
+        if not self.agents_dir.exists():
+            return
+        
+        for agent_file in self.agents_dir.glob("*.json"):
+            try:
+                with open(agent_file, 'r') as f:
                     config_dict = json.load(f)
                 config = AgentConfig(**config_dict)
                 self.agent_configs[config.name] = config
