@@ -54,8 +54,9 @@ RUN pip install --no-cache-dir \
     numpy \
     humanize
 
-# Uncomment to install Strands SDK (replace with actual package name when available)
-# RUN pip install --no-cache-dir strands-sdk
+# Install Strands SDK and its dependencies
+COPY requirements-strands.txt /tmp/requirements-strands.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-strands.txt
 
 # Create working directory and model cache directory
 WORKDIR /app

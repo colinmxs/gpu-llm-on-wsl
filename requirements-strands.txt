@@ -1,7 +1,7 @@
 # Requirements for Strands SDK Integration
 
 # Core Strands SDK
-strands>=1.0.0
+strands>=0.1.0
 
 # Existing dependencies (keep your current versions)
 # torch
