@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  llm-api:
+    build: .
+    container_name: gpu-llm-api
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_HOME=/app/cache
+      - API_PORT=8000
+      - API_HOST=0.0.0.0
+      - MODELS_DIR=/app/models
+      - CACHE_DIR=/app/cache
+    ports:
+      - "8000:8000"  # FastAPI
+      - "7860:7860"  # Gradio Frontend
+      - "7861:7861"  # Agent Playground
+      - "8888:8888"  # Jupyter
+    volumes:
+      - ./models:/app/models
+      - ./cache:/app/cache
+      - ./agents:/app/agents
+      - ./tools:/app/tools
+    command: python -m api.server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

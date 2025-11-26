@@ -46,6 +46,12 @@ A Dockerized environment for running quantized large language models (LLMs) with
         ```
         Open `http://localhost:7860` in your browser.
 
+    -   **FastAPI Server (NEW)**: Run the inference API for local development.
+        ```bash
+        docker run --gpus all -p 8000:8000 -v C:\path\to\models:/app/models -it llm-docker python -m api.server
+        ```
+        Open `http://localhost:8000/docs` for API documentation. See [API_SETUP.md](API_SETUP.md) for detailed usage.
+
     -   **Agent Playground**: Build and test Strands SDK agents with tools.
         ```bash
         docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker python /app/frontend/agent_playground.py
