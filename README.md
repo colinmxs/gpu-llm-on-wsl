@@ -46,15 +46,15 @@ A Dockerized environment for running quantized large language models (LLMs) with
         ```
         Open `http://localhost:7860` in your browser.
 
-    -   **Agent Playground**: Build and test Strands SDK agents with a dedicated interface.
+    -   **Agent Playground**: Build and test Strands SDK agents with tools.
         ```bash
-        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -it llm-docker python /app/frontend/agent_playground.py
+        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker python /app/frontend/agent_playground.py
         ```
-        Open `http://localhost:7861` in your browser.
-    
+        Open `http://localhost:7861` in your browser. Mount `/app/tools` to persist tool definitions.
+
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
-        docker run --gpus all -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -it llm-docker
+        docker run --gpus all -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker
         ```
 
 ---

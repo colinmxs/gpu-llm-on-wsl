@@ -1,0 +1,24 @@
+{
+  "name": "web_search",
+  "description": "Searches the web for information (placeholder)",
+  "function_code": "def web_search(query: str, num_results: int = 5) -> str:\n    \"\"\"Placeholder for web search functionality.\n    \n    In a real implementation, this would call a search API.\n    \"\"\"\n    return f\"Placeholder: Would search for '{query}' and return {num_results} results.\"",
+  "parameters_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Search query string"
+      },
+      "num_results": {
+        "type": "integer",
+        "description": "Number of results to return",
+        "default": 5
+      }
+    },
+    "required": ["query"]
+  },
+  "returns_schema": {
+    "type": "string",
+    "description": "Search results as formatted text"
+  }
+}

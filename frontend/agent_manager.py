@@ -29,7 +29,7 @@ class AgentConfig:
     top_p: float = 0.9
     top_k: int = 50
     repetition_penalty: float = 1.1
-    tools: List[str] = None  # Future: tool names for function calling
+    tools: List[str] = None  # List of tool names associated with this agent
     
     def __post_init__(self):
         if self.tools is None:
@@ -55,10 +55,24 @@ class AgentManager:
         self.agents_dir.mkdir(parents=True, exist_ok=True)
         self.model_manager = model_manager
         self.active_agents: Dict[str, AgentConfig] = {}
+        
+        # Auto-load all saved agents at startup
+        self._load_all_agents()
+    
+    def _load_all_agents(self):
+        """Load all saved agent configurations from disk into memory."""
+        for agent_file in self.agents_dir.glob("*.json"):
+            try:
+                with open(agent_file, 'r') as f:
+                    config_dict = json.load(f)
+                config = AgentConfig(**config_dict)
+                self.active_agents[config.name] = config
+            except Exception as e:
+                print(f"Warning: Failed to load agent {agent_file.name}: {str(e)}")
     
     def create_agent(self, config: AgentConfig) -> Dict[str, Any]:
         """
-        Create a new agent configuration.
+        Create a new agent configuration and automatically save to disk.
         
         Args:
             config: Agent configuration
@@ -68,6 +82,7 @@ class AgentManager:
                 - success: bool
                 - message: str
                 - agent_name: Optional[str]
+                - filepath: Optional[str]
                 - error: Optional[str]
         """
         try:
@@ -80,10 +95,16 @@ class AgentManager:
             # Store in active agents
             self.active_agents[config.name] = config
             
+            # Auto-save to disk
+            filepath = self.agents_dir / f"{config.name}.json"
+            with open(filepath, 'w') as f:
+                json.dump(asdict(config), f, indent=2)
+            
             return {
                 "success": True,
-                "message": f"Agent '{config.name}' created successfully",
-                "agent_name": config.name
+                "message": f"Agent '{config.name}' created and saved",
+                "agent_name": config.name,
+                "filepath": str(filepath)
             }
         except Exception as e:
             return {

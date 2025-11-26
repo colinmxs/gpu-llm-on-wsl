@@ -1,0 +1,19 @@
+{
+  "name": "calculator",
+  "description": "Performs basic mathematical calculations",
+  "function_code": "def calculator(expression: str) -> float:\n    \"\"\"Safely evaluate a mathematical expression.\"\"\"\n    import ast\n    import operator\n    \n    # Safe operators\n    operators = {\n        ast.Add: operator.add,\n        ast.Sub: operator.sub,\n        ast.Mult: operator.mul,\n        ast.Div: operator.truediv,\n        ast.Pow: operator.pow\n    }\n    \n    def eval_expr(node):\n        if isinstance(node, ast.Constant):\n            return node.value\n        elif isinstance(node, ast.BinOp):\n            return operators[type(node.op)](eval_expr(node.left), eval_expr(node.right))\n        else:\n            raise ValueError(f\"Unsupported operation: {type(node)}\")\n    \n    tree = ast.parse(expression, mode='eval')\n    return eval_expr(tree.body)",
+  "parameters_schema": {
+    "type": "object",
+    "properties": {
+      "expression": {
+        "type": "string",
+        "description": "Mathematical expression to evaluate (e.g., '2 + 2', '10 * 5')"
+      }
+    },
+    "required": ["expression"]
+  },
+  "returns_schema": {
+    "type": "number",
+    "description": "Result of the calculation"
+  }
+}

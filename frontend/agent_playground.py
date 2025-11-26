@@ -13,16 +13,19 @@ import gradio as gr
 
 from model_manager import ModelManager
 from agent_manager import AgentManager, AgentConfig
+from tool_manager import ToolManager, ToolConfig
 
 
 # Configuration
 MODELS_DIR = Path("/app/models")
 AGENTS_DIR = Path("/app/agents")
+TOOLS_DIR = Path("/app/tools")
 HF_CACHE = Path(os.getenv("HF_HOME", "/app/cache"))
 
 # Initialize managers
 model_manager = ModelManager(MODELS_DIR, HF_CACHE)
 agent_manager = AgentManager(AGENTS_DIR, model_manager)
+tool_manager = ToolManager(TOOLS_DIR)
 
 
 # Helper functions
@@ -76,6 +79,29 @@ def format_gpu_stats(stats: dict) -> str:
     return result
 
 
+def format_tool_info(info: dict) -> str:
+    """Format tool info dictionary as Markdown."""
+    if not info.get("exists"):
+        return info.get("error", "No tool selected")
+    
+    result = f"## 🔧 {info['name']}\n\n"
+    result += f"**Description:** {info['description']}\n\n"
+    
+    result += "### Function Code\n\n"
+    result += f"```python\n{info['function_code']}\n```\n\n"
+    
+    result += "### Parameters Schema\n\n"
+    import json
+    result += f"```json\n{json.dumps(info['parameters_schema'], indent=2)}\n```\n\n"
+    
+    if info['is_saved']:
+        result += "💾 Tool is saved to disk\n"
+    else:
+        result += "⚠️ Tool not saved (in memory only)\n"
+    
+    return result
+
+
 # UI Action Handlers
 
 def create_new_agent(
@@ -87,14 +113,18 @@ def create_new_agent(
     max_tokens: int,
     top_p: float,
     top_k: int,
-    repetition_penalty: float
-) -> Tuple[str, str, str]:
+    repetition_penalty: float,
+    selected_tools: List[str]
+) -> Tuple[str, gr.Dropdown, gr.Dropdown]:
     """Create a new agent with the specified configuration."""
     if not name.strip():
         return "❌ Agent name is required", "", ""
     
     if not model_name or model_name == "None":
         return "❌ Please select a model", "", ""
+    
+    # Filter out "None" from selected tools
+    tools_list = [t for t in (selected_tools or []) if t != "None"]
     
     config = AgentConfig(
         name=name.strip(),
@@ -105,79 +135,37 @@ def create_new_agent(
         max_tokens=max_tokens,
         top_p=top_p,
         top_k=top_k,
-        repetition_penalty=repetition_penalty
+        repetition_penalty=repetition_penalty,
+        tools=tools_list
     )
     
     result = agent_manager.create_agent(config)
     
     if result["success"]:
-        status_msg = f"✅ {result['message']}\n\n"
-        status_msg += "ℹ️ Agent created in memory. Use 'Save Agent' to persist to disk."
+        status_msg = f"✅ {result['message']}"
         
         # Update agent list dropdown
         active_agents = agent_manager.list_active_agents()
         agent_dropdown_update = gr.Dropdown(choices=["None"] + active_agents, value=name)
         
-        return status_msg, name, agent_dropdown_update
+        return status_msg, agent_dropdown_update, agent_dropdown_update
     else:
-        return f"❌ {result['error']}", "", gr.Dropdown()
+        return f"❌ {result['error']}", gr.Dropdown(), gr.Dropdown()
 
 
-def save_agent_config(agent_name: str) -> str:
-    """Save an agent configuration to disk."""
+def delete_agent_handler(agent_name: str) -> Tuple[str, gr.Dropdown, gr.Dropdown]:
+    """Delete an agent from memory and disk."""
     if not agent_name or agent_name == "None":
-        return "❌ Please select an agent to save"
+        return "❌ Please select an agent to delete", gr.Dropdown(), gr.Dropdown()
     
-    result = agent_manager.save_agent(agent_name)
-    
-    if result["success"]:
-        return f"✅ {result['message']}\n\n📁 Saved to: `{result['filepath']}`"
-    else:
-        return f"❌ {result['error']}"
-
-
-def load_agent_config(agent_name: str) -> Tuple[str, str, str, str, str, float, int, float, int, float, str]:
-    """Load an agent configuration from disk."""
-    if not agent_name or agent_name == "None":
-        return ("❌ Please select an agent to load", "", "", "", "", 0.7, 500, 0.9, 50, 1.1, "")
-    
-    result = agent_manager.load_agent(agent_name)
-    
-    if result["success"]:
-        config = result["config"]
-        status_msg = f"✅ {result['message']}"
-        
-        # Return all config fields to populate the form
-        return (
-            status_msg,
-            config.name,
-            config.description,
-            config.system_prompt,
-            config.model_name,
-            config.temperature,
-            config.max_tokens,
-            config.top_p,
-            config.top_k,
-            config.repetition_penalty,
-            config.name  # For agent selector dropdown
-        )
-    else:
-        return (f"❌ {result['error']}", "", "", "", "", 0.7, 500, 0.9, 50, 1.1, "")
-
-
-def delete_agent_handler(agent_name: str, delete_file: bool) -> Tuple[str, str]:
-    """Delete an agent from memory and optionally from disk."""
-    if not agent_name or agent_name == "None":
-        return "❌ Please select an agent to delete", gr.Dropdown()
-    
-    result = agent_manager.delete_agent(agent_name, delete_file)
+    result = agent_manager.delete_agent(agent_name, delete_file=True)
     
     if result["success"]:
         active_agents = agent_manager.list_active_agents()
         agent_dropdown_update = gr.Dropdown(choices=["None"] + active_agents, value="None")
-        return f"✅ {result['message']}", agent_dropdown_update
+        return f"✅ {result['message']}", agent_dropdown_update, agent_dropdown_update
     else:
-        return f"❌ {result['error']}", gr.Dropdown()
+        return f"❌ {result['error']}", gr.Dropdown(), gr.Dropdown()
 
 
 def get_agent_info_display(agent_name: str) -> str:
@@ -187,6 +175,29 @@ def get_agent_info_display(agent_name: str) -> str:
     
     info = agent_manager.get_agent_info(agent_name)
     return format_agent_info(info)
+
+
+def populate_agent_form(agent_name: str) -> Tuple[str, str, str, str, float, int, float, int, float, List[str]]:
+    """Populate the agent form with the selected agent's configuration."""
+    if not agent_name or agent_name == "None":
+        return ("", "", "", "None", 0.7, 500, 0.9, 50, 1.1, [])
+    
+    config = agent_manager.get_agent_config(agent_name)
+    if not config:
+        return ("", "", "", "None", 0.7, 500, 0.9, 50, 1.1, [])
+    
+    return (
+        config.name,
+        config.description,
+        config.system_prompt,
+        config.model_name,
+        config.temperature,
+        config.max_tokens,
+        config.top_p,
+        config.top_k,
+        config.repetition_penalty,
+        config.tools
+    )
 
 
 def chat_with_agent_handler(
@@ -259,16 +270,94 @@ def unload_current_model() -> Tuple[str, str]:
     return status_msg, format_gpu_stats(model_manager.get_gpu_stats())
 
 
-def refresh_all_lists() -> Tuple[gr.Dropdown, gr.Dropdown, gr.Dropdown]:
-    """Refresh all dropdown lists (models, active agents, saved agents)."""
-    models = model_manager.list_models()
+def refresh_all_lists() -> Tuple[gr.Dropdown, gr.Dropdown]:
+    """Refresh all dropdown lists."""
     active_agents = agent_manager.list_active_agents()
-    saved_agents = agent_manager.list_saved_agents()
+    active_tools = tool_manager.list_active_tools()
     
     return (
-        gr.Dropdown(choices=["None"] + models),
         gr.Dropdown(choices=["None"] + active_agents),
-        gr.Dropdown(choices=["None"] + saved_agents)
+        gr.Dropdown(choices=active_tools, multiselect=True)
+    )
+
+
+# Tool Management Handlers
+
+def create_new_tool(name: str, description: str, function_code: str, parameters_schema: str) -> Tuple[str, gr.Dropdown]:
+    """Create a new tool with the specified configuration."""
+    if not name.strip():
+        return "❌ Tool name is required", gr.Dropdown()
+    
+    if not function_code.strip():
+        return "❌ Function code is required", gr.Dropdown()
+    
+    try:
+        import json
+        params_schema = json.loads(parameters_schema) if parameters_schema.strip() else {}
+    except json.JSONDecodeError:
+        return "❌ Invalid JSON in parameters schema", gr.Dropdown()
+    
+    config = ToolConfig(
+        name=name.strip(),
+        description=description.strip(),
+        function_code=function_code.strip(),
+        parameters_schema=params_schema,
+        returns_schema={"type": "string"}
+    )
+    
+    result = tool_manager.create_tool(config)
+    
+    if result["success"]:
+        active_tools = tool_manager.list_active_tools()
+        return (
+            f"✅ {result['message']}",
+            gr.Dropdown(choices=["None"] + active_tools, value=name)
+        )
+    else:
+        return f"❌ {result['error']}", gr.Dropdown()
+
+
+def delete_tool_handler(tool_name: str) -> Tuple[str, gr.Dropdown]:
+    """Delete a tool from memory and disk."""
+    if not tool_name or tool_name == "None":
+        return "❌ Please select a tool to delete", gr.Dropdown()
+    
+    result = tool_manager.delete_tool(tool_name, delete_file=True)
+    
+    if result["success"]:
+        active_tools = tool_manager.list_active_tools()
+        tool_dropdown_update = gr.Dropdown(choices=["None"] + active_tools, value="None")
+        return f"✅ {result['message']}", tool_dropdown_update
+    else:
+        return f"❌ {result['error']}", gr.Dropdown()
+
+
+def get_tool_info_display(tool_name: str) -> str:
+    """Get and format tool information for display."""
+    if not tool_name or tool_name == "None":
+        return "No tool selected"
+    
+    info = tool_manager.get_tool_info(tool_name)
+    return format_tool_info(info)
+
+
+def populate_tool_form(tool_name: str) -> Tuple[str, str, str, str]:
+    """Populate the tool form with the selected tool's configuration."""
+    if not tool_name or tool_name == "None":
+        return ("", "", "", "")
+    
+    config = tool_manager.get_tool_config(tool_name)
+    if not config:
+        return ("", "", "", "")
+    
+    import json
+    params_json = json.dumps(config.parameters_schema, indent=2)
+    
+    return (
+        config.name,
+        config.description,
+        config.function_code,
+        params_json
     )
 
 
@@ -279,7 +368,6 @@ def create_interface():
     available_models = model_manager.list_models()
     model_choices = ["None"] + available_models
     active_agents = agent_manager.list_active_agents()
-    saved_agents = agent_manager.list_saved_agents()
     
     with gr.Blocks(title="Agent Playground", theme=gr.themes.Soft()) as demo:
         gr.Markdown("# 🎮 Agent Playground")
@@ -319,6 +407,14 @@ def create_interface():
                             info="Select the LLM model for this agent"
                         )
                         
+                        tools_selector = gr.Dropdown(
+                            choices=["None"] + tool_manager.list_active_tools(),
+                            value=[],
+                            label="Tools",
+                            info="Select tools for this agent (optional)",
+                            multiselect=True
+                        )
+                        
                         gr.Markdown("### Generation Parameters")
                         
                         with gr.Row():
@@ -333,42 +429,25 @@ def create_interface():
                         
                         with gr.Row():
                             create_btn = gr.Button("🆕 Create Agent", variant="primary", size="lg")
-                            refresh_btn = gr.Button("♻️ Refresh Lists", variant="secondary")
+                            refresh_btn = gr.Button("♻️ Refresh", variant="secondary")
                         
                         builder_status = gr.Markdown("Ready to create an agent")
                     
                     with gr.Column(scale=1):
-                        gr.Markdown("## 💾 Save/Load")
+                        gr.Markdown("## 📋 All Agents")
                         
                         active_agent_selector = gr.Dropdown(
                             choices=["None"] + active_agents,
                             value="None",
-                            label="Active Agents",
-                            info="Agents in memory"
+                            label="Select Agent",
+                            info="All agents (auto-saved)"
                         )
                         
-                        save_btn = gr.Button("💾 Save Agent", variant="primary")
+                        gr.Markdown("## 🗑️ Delete Agent")
                         
-                        saved_agent_selector = gr.Dropdown(
-                            choices=["None"] + saved_agents,
-                            value="None",
-                            label="Saved Agents",
-                            info="Agents saved to disk"
-                        )
+                        delete_btn = gr.Button("🗑️ Delete Selected Agent", variant="stop")
                         
-                        load_btn = gr.Button("📂 Load Agent", variant="primary")
-                        
-                        gr.Markdown("## 🗑️ Delete")
-                        
-                        delete_file_checkbox = gr.Checkbox(
-                            label="Also delete saved file",
-                            value=False,
-                            info="Remove from disk permanently"
-                        )
-                        
-                        delete_btn = gr.Button("🗑️ Delete Agent", variant="stop")
-                        
-                        save_load_status = gr.Markdown("")
+                        agent_status = gr.Markdown("")
             
             # Agent Testing Tab
             with gr.Tab("🧪 Agent Testing"):
@@ -433,10 +512,67 @@ def create_interface():
                         **Multi-Agent Future:**
                         This interface is designed to be extensible for multi-agent collaboration scenarios.
                         """)
+            
+            # Tool Builder Tab
+            with gr.Tab("🔧 Tool Builder"):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        gr.Markdown("## Create or Edit Tool")
+                        
+                        tool_name_input = gr.Textbox(
+                            label="Tool Name",
+                            placeholder="calculator",
+                            info="Unique identifier for this tool"
+                        )
+                        
+                        tool_description_input = gr.Textbox(
+                            label="Description",
+                            placeholder="Performs mathematical calculations",
+                            lines=2,
+                            info="Brief description of what the tool does"
+                        )
+                        
+                        function_code_input = gr.Textbox(
+                            label="Function Code",
+                            placeholder="def calculator(expression: str) -> float:\n    return eval(expression)",
+                            lines=10,
+                            info="Python code that implements the tool function"
+                        )
+                        
+                        parameters_schema_input = gr.Textbox(
+                            label="Parameters Schema (JSON)",
+                            placeholder='{"type": "object", "properties": {"expression": {"type": "string"}}}',
+                            lines=6,
+                            info="JSON schema describing the function parameters"
+                        )
+                        
+                        with gr.Row():
+                            create_tool_btn = gr.Button("🆕 Create Tool", variant="primary", size="lg")
+                            refresh_tools_btn = gr.Button("♻️ Refresh", variant="secondary")
+                        
+                        tool_builder_status = gr.Markdown("Ready to create a tool")
+                    
+                    with gr.Column(scale=1):
+                        gr.Markdown("## 📋 All Tools")
+                        
+                        active_tool_selector = gr.Dropdown(
+                            choices=["None"] + tool_manager.list_active_tools(),
+                            value="None",
+                            label="Select Tool",
+                            info="All tools (auto-saved)"
+                        )
+                        
+                        tool_info_display = gr.Markdown("No tool selected")
+                        
+                        gr.Markdown("## 🗑️ Delete Tool")
+                        
+                        delete_tool_btn = gr.Button("🗑️ Delete Selected Tool", variant="stop")
+                        
+                        tool_status = gr.Markdown("")
         
         # Event Handlers
         
-        # Builder Tab Events
+        # Agent Builder Tab Events
         create_btn.click(
             fn=create_new_agent,
             inputs=[
@@ -448,31 +584,30 @@ def create_interface():
                 max_tokens_input,
                 top_p_input,
                 top_k_input,
-                repetition_penalty_input
+                repetition_penalty_input,
+                tools_selector
             ],
-            outputs=[builder_status, agent_name_input, active_agent_selector]
+            outputs=[builder_status, active_agent_selector, test_agent_selector]
         ).then(
             fn=refresh_all_lists,
-            outputs=[model_selector, active_agent_selector, saved_agent_selector]
-        ).then(
-            fn=refresh_all_lists,
-            outputs=[model_selector, test_agent_selector, saved_agent_selector]
+            outputs=[active_agent_selector, tools_selector]
         )
         
-        save_btn.click(
-            fn=save_agent_config,
+        delete_btn.click(
+            fn=delete_agent_handler,
             inputs=[active_agent_selector],
-            outputs=[save_load_status]
-        ).then(
-            fn=refresh_all_lists,
-            outputs=[model_selector, saved_agent_selector, active_agent_selector]
+            outputs=[agent_status, active_agent_selector, test_agent_selector]
         )
         
-        load_btn.click(
-            fn=load_agent_config,
-            inputs=[saved_agent_selector],
+        refresh_btn.click(
+            fn=refresh_all_lists,
+            outputs=[active_agent_selector, tools_selector]
+        )
+        
+        active_agent_selector.change(
+            fn=populate_agent_form,
+            inputs=[active_agent_selector],
             outputs=[
-                save_load_status,
                 agent_name_input,
                 agent_description_input,
                 system_prompt_input,
@@ -482,28 +617,8 @@ def create_interface():
                 top_p_input,
                 top_k_input,
                 repetition_penalty_input,
-                active_agent_selector
+                tools_selector
             ]
-        ).then(
-            fn=refresh_all_lists,
-            outputs=[model_selector, active_agent_selector, test_agent_selector]
-        )
-        
-        delete_btn.click(
-            fn=delete_agent_handler,
-            inputs=[active_agent_selector, delete_file_checkbox],
-            outputs=[save_load_status, active_agent_selector]
-        ).then(
-            fn=refresh_all_lists,
-            outputs=[model_selector, active_agent_selector, test_agent_selector]
-        )
-        
-        refresh_btn.click(
-            fn=refresh_all_lists,
-            outputs=[model_selector, active_agent_selector, saved_agent_selector]
-        ).then(
-            fn=refresh_all_lists,
-            outputs=[model_selector, test_agent_selector, saved_agent_selector]
         )
         
         # Testing Tab Events
@@ -541,6 +656,52 @@ def create_interface():
         clear_chat_btn.click(
             fn=lambda: ([], ""),
             outputs=[chatbot, chat_input]
+        )
+        
+        # Tool Builder Tab Events
+        create_tool_btn.click(
+            fn=create_new_tool,
+            inputs=[
+                tool_name_input,
+                tool_description_input,
+                function_code_input,
+                parameters_schema_input
+            ],
+            outputs=[tool_builder_status, active_tool_selector]
+        ).then(
+            fn=refresh_all_lists,
+            outputs=[active_agent_selector, tools_selector]
+        )
+        
+        delete_tool_btn.click(
+            fn=delete_tool_handler,
+            inputs=[active_tool_selector],
+            outputs=[tool_status, active_tool_selector]
+        ).then(
+            fn=refresh_all_lists,
+            outputs=[active_agent_selector, tools_selector]
+        )
+        
+        refresh_tools_btn.click(
+            fn=refresh_all_lists,
+            outputs=[active_agent_selector, tools_selector]
+        )
+        
+        active_tool_selector.change(
+            fn=populate_tool_form,
+            inputs=[active_tool_selector],
+            outputs=[
+                tool_name_input,
+                tool_description_input,
+                function_code_input,
+                parameters_schema_input
+            ]
+        )
+        
+        active_tool_selector.change(
+            fn=get_tool_info_display,
+            inputs=[active_tool_selector],
+            outputs=[tool_info_display]
         )
     
     return demo
@@ -581,6 +742,16 @@ def main():
     else:
         print(f"📁 Creating agents directory: {AGENTS_DIR}")
         AGENTS_DIR.mkdir(parents=True, exist_ok=True)
+    print()
+    
+    if TOOLS_DIR.exists():
+        saved_tools = tool_manager.list_saved_tools()
+        print(f"🔧 Found {len(saved_tools)} saved tool(s) in {TOOLS_DIR}")
+        for tool in saved_tools:
+            print(f"   - {tool}")
+    else:
+        print(f"📁 Creating tools directory: {TOOLS_DIR}")
+        TOOLS_DIR.mkdir(parents=True, exist_ok=True)
     print()
     
     print("🚀 Starting Agent Playground...")

@@ -59,14 +59,15 @@ RUN pip install --no-cache-dir \
 
 # Create working directory and model cache directory
 WORKDIR /app
-RUN mkdir -p /app/models /app/cache /app/agents
+RUN mkdir -p /app/models /app/cache /app/agents /app/tools
 
 # Copy utility notebooks and frontend into the image
 COPY notebooks /app/notebooks
 COPY frontend /app/frontend
 
-# Copy example agents to a reference directory (users can copy these to /app/agents)
+# Copy example agents and tools to reference directories
 COPY frontend/example_agents /app/example_agents
+COPY frontend/example_tools /app/example_tools
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
