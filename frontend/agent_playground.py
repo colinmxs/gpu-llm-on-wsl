@@ -24,7 +24,7 @@ HF_CACHE = Path(os.getenv("HF_HOME", "/app/cache"))
 
 # Initialize managers
 model_manager = ModelManager(MODELS_DIR, HF_CACHE)
-agent_manager = AgentManager(AGENTS_DIR, model_manager)
+agent_manager = AgentManager(AGENTS_DIR, model_manager, tools_dir=TOOLS_DIR)
 tool_manager = ToolManager(TOOLS_DIR)
 
 
@@ -87,6 +87,12 @@ def format_tool_info(info: dict) -> str:
     result = f"## 🔧 {info['name']}\n\n"
     result += f"**Description:** {info['description']}\n\n"
     
+    # Strands SDK compatibility status
+    if info.get('strands_compatible'):
+        result += "✅ **Strands SDK Compatible** (has @strands.tool decorator)\n\n"
+    else:
+        result += "⚠️ **Not Strands Compatible** (missing @strands.tool decorator)\n\n"
+    
     result += "### Function Code\n\n"
     result += f"```python\n{info['function_code']}\n```\n\n"
     
@@ -95,9 +101,9 @@ def format_tool_info(info: dict) -> str:
     result += f"```json\n{json.dumps(info['parameters_schema'], indent=2)}\n```\n\n"
     
     if info['is_saved']:
-        result += "💾 Tool is saved to disk\n"
-    else:
-        result += "⚠️ Tool not saved (in memory only)\n"
+        result += "💾 Tool config saved to disk\n"
+    if info.get('has_python_file'):
+        result += f"🐍 Python file: `{info.get('python_filepath', 'N/A')}`\n"
     
     return result
 

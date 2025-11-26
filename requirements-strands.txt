@@ -1,0 +1,15 @@
+# Requirements for Strands SDK Integration
+
+# Core Strands SDK
+strands>=1.0.0
+
+# Existing dependencies (keep your current versions)
+# torch
+# transformers
+# gradio
+# humanize
+# bitsandbytes
+
+# Optional: For enhanced Strands features
+# pydantic>=2.0.0  # For structured output
+# redis  # For Valkey/Redis session management (optional)

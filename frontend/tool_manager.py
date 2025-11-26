@@ -1,8 +1,8 @@
 """
 Tool Manager - Backend logic for Strands SDK tool creation and management.
 
-This module provides a clean interface for managing tools that can be used by agents,
-handling tool configuration, persistence, and instantiation independently of UI concerns.
+This module provides a clean interface for managing tools that can be used by agents.
+All tools are Python files with @strands.tool decorator.
 """
 
 import json
@@ -10,15 +10,22 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
+import strands
+
 
 @dataclass
 class ToolConfig:
-    """Configuration for a Strands SDK tool."""
+    """
+    Configuration for a Strands SDK tool.
+    
+    Strands SDK expects tools to be Python functions decorated with @strands.tool.
+    This config stores metadata for UI/persistence, while the actual tool is a Python file.
+    """
     name: str
     description: str
-    function_code: str  # Python code that defines the tool function
-    parameters_schema: Dict[str, Any]  # JSON schema for tool parameters
-    returns_schema: Dict[str, Any]  # JSON schema for return value
+    function_code: str  # Python code that defines the tool function with @strands.tool decorator
+    parameters_schema: Dict[str, Any]  # JSON schema for tool parameters (for UI display)
+    returns_schema: Dict[str, Any]  # JSON schema for return value (for UI display)
     
     def __post_init__(self):
         if not self.parameters_schema:
@@ -29,9 +36,10 @@ class ToolConfig:
 
 class ToolManager:
     """
-    Manages Strands SDK tools including creation, loading, saving, and instantiation.
+    Manages Strands SDK tools including creation, loading, saving, and validation.
     
-    This class is UI-agnostic and returns data dictionaries for any frontend.
+    Tools in Strands SDK are Python files with functions decorated with @strands.tool.
+    This manager helps create, persist, and manage such tools.
     """
     
     def __init__(self, tools_dir: Path):
@@ -39,7 +47,7 @@ class ToolManager:
         Initialize the ToolManager.
         
         Args:
-            tools_dir: Directory where tool configurations are stored
+            tools_dir: Directory where tool files (.py and .json configs) are stored
         """
         self.tools_dir = Path(tools_dir)
         self.tools_dir.mkdir(parents=True, exist_ok=True)
@@ -47,6 +55,40 @@ class ToolManager:
         
         # Auto-load all saved tools at startup
         self._load_all_tools()
+    
+    def _ensure_strands_decorator(self, function_code: str) -> str:
+        """
+        Ensure the function code includes @strands.tool decorator.
+        
+        Args:
+            function_code: The raw Python function code
+            
+        Returns:
+            Function code with @strands.tool decorator added if missing
+        """
+        if "@strands.tool" in function_code or "@tool" in function_code:
+            return function_code
+        
+        # Add import and decorator
+        lines = function_code.strip().split('\n')
+        
+        # Find the function definition line
+        func_line_idx = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith('def '):
+                func_line_idx = i
+                break
+        
+        if func_line_idx is not None:
+            # Insert decorator before function definition
+            indent = len(lines[func_line_idx]) - len(lines[func_line_idx].lstrip())
+            decorator = ' ' * indent + '@strands.tool'
+            lines.insert(func_line_idx, decorator)
+            lines.insert(0, 'import strands')
+            lines.insert(1, '')
+            return '\n'.join(lines)
+        
+        return function_code
     
     def _load_all_tools(self):
         """Load all saved tool configurations from disk into memory."""
@@ -62,6 +104,9 @@ class ToolManager:
     def create_tool(self, config: ToolConfig) -> Dict[str, Any]:
         """
         Create a new tool configuration and automatically save to disk.
+        
+        Creates both a JSON config file (for metadata) and a Python file (for Strands).
+        The Python file will include the @strands.tool decorator if not present.
         
         Args:
             config: Tool configuration
@@ -81,19 +126,28 @@ class ToolManager:
             if not config.function_code:
                 return {"success": False, "error": "Function code is required"}
             
+            # Ensure the function code has @strands.tool decorator
+            config.function_code = self._ensure_strands_decorator(config.function_code)
+            
             # Store in active tools
             self.active_tools[config.name] = config
             
-            # Auto-save to disk
-            filepath = self.tools_dir / f"{config.name}.json"
-            with open(filepath, 'w') as f:
+            # Auto-save JSON config (for UI/metadata)
+            json_filepath = self.tools_dir / f"{config.name}.json"
+            with open(json_filepath, 'w') as f:
                 json.dump(asdict(config), f, indent=2)
+                
+            # Save Python code file for Strands SDK
+            py_filepath = self.tools_dir / f"{config.name}.py"
+            with open(py_filepath, 'w') as f:
+                f.write(config.function_code)
             
             return {
                 "success": True,
-                "message": f"Tool '{config.name}' created and saved",
+                "message": f"Tool '{config.name}' created and saved (ready for Strands SDK)",
                 "tool_name": config.name,
-                "filepath": str(filepath)
+                "filepath": str(json_filepath),
+                "python_file": str(py_filepath)
             }
         except Exception as e:
             return {
@@ -264,6 +318,8 @@ class ToolManager:
         
         config = self.active_tools[tool_name]
         is_saved = (self.tools_dir / f"{tool_name}.json").exists()
+        has_py_file = (self.tools_dir / f"{tool_name}.py").exists()
+        has_strands_decorator = "@strands.tool" in config.function_code or "@tool" in config.function_code
         
         return {
             "exists": True,
@@ -272,5 +328,8 @@ class ToolManager:
             "function_code": config.function_code,
             "parameters_schema": config.parameters_schema,
             "returns_schema": config.returns_schema,
-            "is_saved": is_saved
+            "is_saved": is_saved,
+            "has_python_file": has_py_file,
+            "strands_compatible": has_strands_decorator,
+            "python_filepath": str(self.tools_dir / f"{tool_name}.py") if has_py_file else None
         }
