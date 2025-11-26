@@ -83,9 +83,9 @@ COPY api /app/api
 COPY notebooks /app/notebooks
 COPY frontend /app/frontend
 
-# Copy example agents and tools to reference directories
-COPY frontend/example_agents /app/example_agents
-COPY frontend/example_tools /app/example_tools
+# Copy example agents and tools to reference directories (now in strands-agents/examples)
+COPY strands-agents/examples/agents /app/example_agents
+COPY strands-agents/examples/tools /app/example_tools
 
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
