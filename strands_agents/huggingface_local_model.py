@@ -103,10 +103,13 @@ class HuggingFaceLocalModel(Model):
         Yields:
             StreamEvent dictionaries compatible with Strands SDK
         """
+        import asyncio
+        
         # Build prompt from Strands Messages
         prompt = self._format_messages_to_prompt(messages, system_prompt)
         
-        # Stream using model_manager
+        # Stream using model_manager (sync generator) - wrap in async
+        # Run the sync generator in a way that allows yielding to event loop
         for event in self.model_manager.generate(
             prompt=prompt,
             max_tokens=self.config["max_tokens"],
@@ -120,6 +123,8 @@ class HuggingFaceLocalModel(Model):
             strands_event = self._convert_to_strands_event(event)
             if strands_event:
                 yield strands_event
+                # Yield control to allow other async operations
+                await asyncio.sleep(0)
     
     def _format_messages_to_prompt(
         self,

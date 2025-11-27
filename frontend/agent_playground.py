@@ -229,10 +229,16 @@ def chat_with_agent_handler(message: str, history: list, agent_name: str):
     # Initialize response tracking
     assistant_response = ""
     metadata = {}
+    event_count = 0
     
     # Stream responses from Strands agent
     for event in agent_manager.chat_with_agent(agent_name, message, history):
+        event_count += 1
         event_type = event.get("type")
+        
+        # Debug: Log first few events to understand structure
+        if event_count <= 3:
+            print(f"[DEBUG] Event {event_count}: type={event_type}, keys={list(event.keys())}")
         
         if event_type == "error":
             # Handle errors
@@ -269,21 +275,17 @@ def chat_with_agent_handler(message: str, history: list, agent_name: str):
             yield history + [(message, final_response)], ""
             return
         
-        # Fallback for old event format (for backward compatibility)
-        elif event_type == "token":
-            assistant_response = event.get("cumulative_text", "")
+        # Catch-all: yield any text we've accumulated so far
+        elif assistant_response:
             yield history + [(message, assistant_response)], ""
-        
-        elif event_type == "complete":
-            assistant_response = event.get("text", "")
-            stats = f"\n\n*[{event.get('total_tokens', 0)} tokens, {event.get('tokens_per_second', 0):.1f} tok/s, {event.get('elapsed_seconds', 0):.2f}s]*"
-            final_response = assistant_response + stats
-            yield history + [(message, final_response)], ""
-            return
     
     # Fallback if loop completes without complete event
     if assistant_response:
         yield history + [(message, assistant_response)], ""
+    else:
+        # No response at all
+        print(f"[WARNING] No response generated. Total events: {event_count}")
+        yield history + [(message, "⚠️ No response generated")], ""
 
 
 def load_model_for_agent(agent_name: str, quantization: str) -> Tuple[str, str]:
