@@ -1,12 +1,14 @@
 """
-Gradio Frontend for Strands Agent Creator
+Gradio Frontend for Strands Agent Creator & Tool Creator
 
-This module provides a comprehensive UI for creating and managing Strands SDK agents,
-including configuration of models, tools, conversation management, and advanced features.
+This module provides a comprehensive UI for creating and managing Strands SDK agents and tools.
+Includes both Agent Creator and Tool Creator in a single tabbed interface.
 """
 
 import gradio as gr
 import sys
+import ast
+import re
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict, Any
 import json
@@ -16,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from shared.model_manager import ModelManager
 from strands_agents.agent_manager import AgentManager
-from strands_agents.tool_manager import ToolManager
+from strands_agents.tool_manager import ToolManager, ToolConfig
 
 
 # Initialize managers
@@ -29,63 +31,82 @@ agent_manager = AgentManager(agents_dir=AGENTS_DIR, model_manager=model_manager,
 tool_manager = ToolManager(tools_dir=TOOLS_DIR)
 
 
-# Preset configurations for quick start
-PRESETS = {
-    "Helpful Assistant": {
-        "description": "A general-purpose helpful AI assistant",
-        "system_prompt": "You are a helpful, harmless, and honest AI assistant. You provide clear, accurate, and concise responses. When you don't know something, you admit it. You are friendly and professional in your communication style.",
-        "temperature": 0.7,
-        "max_tokens": 500,
-        "top_p": 0.9,
-        "top_k": 50,
-        "repetition_penalty": 1.1,
-        "conv_manager_type": "Sliding Window",
-        "window_size": 40,
-    },
-    "Code Assistant": {
-        "description": "A coding assistant specialized in Python and debugging",
-        "system_prompt": "You are an expert Python programmer and debugging assistant. You help users write clean, efficient, and well-documented code. You explain your reasoning, suggest best practices, and provide code examples when helpful. You're patient and break down complex concepts into understandable parts.",
-        "temperature": 0.3,
-        "max_tokens": 800,
-        "top_p": 0.95,
-        "top_k": 40,
-        "repetition_penalty": 1.15,
-        "conv_manager_type": "Sliding Window",
-        "window_size": 40,
-    },
-    "Creative Writer": {
-        "description": "A creative writing assistant for storytelling and content creation",
-        "system_prompt": "You are a creative writing assistant with expertise in storytelling, narrative development, and engaging content creation. You help users brainstorm ideas, develop characters, craft compelling plots, and refine their writing. You're imaginative, supportive, and provide constructive feedback.",
-        "temperature": 0.9,
-        "max_tokens": 1000,
-        "top_p": 0.95,
-        "top_k": 50,
-        "repetition_penalty": 1.05,
-        "conv_manager_type": "Sliding Window",
-        "window_size": 40,
-    },
-    "Research Agent": {
-        "description": "An agent specialized in research and information gathering",
-        "system_prompt": "You are a research assistant skilled at gathering, analyzing, and synthesizing information. You help users find relevant information, compare sources, and draw insightful conclusions. You cite your reasoning and acknowledge limitations in available data.",
-        "temperature": 0.4,
-        "max_tokens": 800,
-        "top_p": 0.9,
-        "top_k": 50,
-        "repetition_penalty": 1.1,
-        "conv_manager_type": "Summarizing",
-        "summary_ratio": 0.3,
-    },
-    "Custom": {
-        "description": "",
-        "system_prompt": "",
-        "temperature": 0.7,
-        "max_tokens": 500,
-        "top_p": 0.9,
-        "top_k": 50,
-        "repetition_penalty": 1.1,
-        "conv_manager_type": "Sliding Window",
-        "window_size": 40,
-    }
+PROMPT_TEMPLATES = {
+    "Llama 3": """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are a helpful AI assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+{user_message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+""",
+    
+    "Mistral Instruct": """<s>[INST] You are a helpful AI assistant.
+
+{user_message} [/INST]""",
+    
+    "Cohere Command": """<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>You are a helpful AI assistant.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|USER_TOKEN|>{user_message}<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>""",
+}
+
+# Tool Creator type annotations
+TYPE_ANNOTATIONS = [
+    "str", "int", "float", "bool", "list", "dict", "Any",
+    "Optional[str]", "Optional[int]", "Optional[float]", "Optional[bool]",
+    "List[str]", "List[int]", "Dict[str, Any]",
+]
+
+# Tool Creator code templates
+CODE_TEMPLATES = {
+    "Basic Template": """try:
+    # Your implementation here
+    result = "Hello, World!"
+    return result
+except Exception as e:
+    return f"Error: {str(e)}"
+""",
+    "Safe Math Evaluation": """import ast
+import operator
+
+operators = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Pow: operator.pow
+}
+
+def eval_expr(node):
+    if isinstance(node, ast.Constant):
+        return node.value
+    elif isinstance(node, ast.BinOp):
+        return operators[type(node.op)](eval_expr(node.left), eval_expr(node.right))
+    else:
+        raise ValueError(f"Unsupported operation: {type(node)}")
+
+try:
+    tree = ast.parse(expression, mode='eval')
+    result = eval_expr(tree.body)
+    return str(result)
+except Exception as e:
+    return f"Error: {str(e)}"
+""",
+    "String Processing": """try:
+    result = text.strip().lower()
+    result = result.replace(old_value, new_value)
+    return result
+except Exception as e:
+    return f"Error: {str(e)}"
+""",
+    "JSON Data Processing": """import json
+
+try:
+    data = json.loads(json_string)
+    result = {"processed": True, "data": data}
+    return json.dumps(result, indent=2)
+except json.JSONDecodeError as e:
+    return f"Invalid JSON: {str(e)}"
+except Exception as e:
+    return f"Error: {str(e)}"
+""",
 }
 
 
@@ -107,30 +128,13 @@ def get_saved_agents() -> List[str]:
     return agents if agents else ["No agents saved"]
 
 
-def apply_preset(preset_name: str) -> Tuple:
+def apply_prompt_template(template_name: str) -> str:
     """
-    Apply a preset configuration.
+    Apply a prompt template.
     
-    Returns tuple of all configuration values.
+    Returns the prompt template text.
     """
-    preset = PRESETS.get(preset_name, PRESETS["Custom"])
-    
-    # Return all configuration values in the correct order
-    return (
-        preset.get("description", ""),
-        preset.get("system_prompt", ""),
-        preset.get("temperature", 0.7),
-        preset.get("max_tokens", 500),
-        preset.get("top_p", 0.9),
-        preset.get("top_k", 50),
-        preset.get("repetition_penalty", 1.1),
-        preset.get("conv_manager_type", "Sliding Window"),
-        preset.get("window_size", 40),
-        preset.get("truncate_results", True),
-        preset.get("summary_ratio", 0.3),
-        preset.get("preserve_recent", 10),
-        preset.get("custom_summary_prompt", ""),
-    )
+    return PROMPT_TEMPLATES.get(template_name, "")
 
 
 def load_agent_config(agent_name: str) -> Tuple:
@@ -139,13 +143,33 @@ def load_agent_config(agent_name: str) -> Tuple:
     
     Returns tuple of all configuration values.
     """
+    # Default empty values
+    default_values = (
+        "",  # name
+        "",  # description
+        "",  # system_prompt
+        "",  # model_name
+        0.7,  # temperature
+        500,  # max_tokens
+        0.9,  # top_p
+        50,  # top_k
+        1.1,  # repetition_penalty
+        [],  # tools
+        "Sliding Window",  # conv_manager_type
+        40,  # window_size
+        True,  # truncate_results
+        0.3,  # summary_ratio
+        10,  # preserve_recent
+        "",  # custom_summary_prompt
+    )
+    
     if not agent_name or agent_name == "No agents saved":
-        return apply_preset("Custom")
+        return default_values
     
     agent_info = agent_manager.get_agent_info(agent_name)
     
     if not agent_info.get("exists"):
-        return apply_preset("Custom")
+        return default_values
     
     # Extract configuration
     return (
@@ -331,38 +355,305 @@ def update_conv_manager_visibility(conv_type: str) -> Tuple:
         )
 
 
-def create_agent_creator_ui():
-    """Create the complete Agent Creator UI."""
-    
-    with gr.Blocks(title="Strands Agent Creator") as interface:
-        gr.Markdown("# 🤖 Strands Agent Creator")
-        gr.Markdown("Create and manage AI agents with custom configurations, tools, and conversation management.")
+# ============================================================================
+# TOOL CREATOR FUNCTIONS
+# ============================================================================
+
+def to_snake_case(text: str) -> str:
+    """Convert text to snake_case for valid Python identifiers."""
+    text = re.sub(r'[^a-zA-Z0-9_]', '_', text)
+    text = re.sub(r'(?<!^)(?=[A-Z])', '_', text).lower()
+    text = re.sub(r'_+', '_', text)
+    return text.strip('_')
+
+
+def refresh_tool_list_tc() -> gr.Dropdown:
+    """Refresh tool list for tool creator."""
+    tools = tool_manager.list_saved_tools()
+    return gr.Dropdown(choices=tools, value=None)
+
+
+def auto_populate_function_name(tool_name: str) -> str:
+    """Auto-generate function name from tool name."""
+    return to_snake_case(tool_name) if tool_name else ""
+
+
+def generate_function_skeleton(function_name: str, parameters_json: str, return_type: str, 
+                               enable_context: bool, context_param_name: str, template_choice: str) -> str:
+    """Generate a function skeleton based on parameters."""
+    try:
+        params = json.loads(parameters_json) if parameters_json else []
+        param_list = []
+        for p in params:
+            param_str = f"{p['name']}: {p['type_annotation']}"
+            if not p['required'] and p['default_value']:
+                param_str += f" = {p['default_value']}"
+            param_list.append(param_str)
         
-        with gr.Row():
-            # Left sidebar - Agent Library
-            with gr.Column(scale=1):
-                gr.Markdown("## 📚 Agent Library")
-                
-                agent_list = gr.Dropdown(
-                    choices=get_saved_agents(),
-                    label="Saved Agents",
-                    interactive=True,
-                    value=None
-                )
-                
+        if enable_context:
+            ctx_name = context_param_name if context_param_name else "tool_context"
+            param_list.append(f"{ctx_name}: dict")
+        
+        params_str = ", ".join(param_list)
+        signature = f"def {function_name}({params_str}) -> {return_type}:"
+        template_body = CODE_TEMPLATES.get(template_choice, CODE_TEMPLATES["Basic Template"])
+        body_lines = template_body.split('\n')
+        indented_body = '\n'.join('    ' + line if line.strip() else '' for line in body_lines)
+        return f"{signature}\n{indented_body}"
+    except Exception as e:
+        return f"# Error: {str(e)}\n\npass"
+
+
+def build_docstring(description: str, parameters_json: str, return_description: str) -> str:
+    """Build a properly formatted docstring."""
+    try:
+        params = json.loads(parameters_json) if parameters_json else []
+        lines = ['"""', description, ""]
+        if params:
+            lines.append("Args:")
+            for p in params:
+                lines.append(f"    {p['name']}: {p.get('description', 'No description')}")
+            lines.append("")
+        if return_description:
+            lines.append("Returns:")
+            lines.append(f"    {return_description}")
+            lines.append("")
+        lines.append('"""')
+        return '\n'.join(lines)
+    except Exception as e:
+        return f'"""Error: {str(e)}"""'
+
+
+def generate_complete_tool_code(tool_name: str, description: str, function_name: str, parameters_json: str,
+                                return_type: str, return_description: str, function_body: str,
+                                enable_context: bool, context_param_name: str, custom_name: str,
+                                custom_description: str, enable_custom_schema: bool, custom_schema: str) -> Tuple[str, str]:
+    """Generate the complete tool code with decorator and docstring."""
+    try:
+        params = json.loads(parameters_json) if parameters_json else []
+        imports = ["from strands import tool"]
+        all_types = [p['type_annotation'] for p in params] + [return_type]
+        if any('Optional' in t or 'List' in t or 'Dict' in t for t in all_types):
+            imports.append("from typing import Optional, List, Dict, Any")
+        
+        decorator_args = []
+        if custom_name:
+            decorator_args.append(f'name="{custom_name}"')
+        if custom_description:
+            decorator_args.append(f'description="{custom_description}"')
+        if enable_custom_schema and custom_schema:
+            decorator_args.append(f'inputSchema={custom_schema}')
+        if enable_context:
+            ctx_name = context_param_name if context_param_name else "tool_context"
+            decorator_args.append(f'context="{ctx_name}"')
+        
+        decorator = f"@tool({', '.join(decorator_args)})" if decorator_args else "@tool"
+        
+        param_list = []
+        for p in params:
+            param_str = f"{p['name']}: {p['type_annotation']}"
+            if not p['required'] and p['default_value']:
+                param_str += f" = {p['default_value']}"
+            param_list.append(param_str)
+        
+        if enable_context:
+            ctx_name = context_param_name if context_param_name else "tool_context"
+            param_list.append(f"{ctx_name}: dict")
+        
+        docstring = build_docstring(description, parameters_json, return_description)
+        docstring_lines = docstring.split('\n')
+        indented_docstring = '\n'.join('    ' + line if line.strip() or i == 0 else '' 
+                                      for i, line in enumerate(docstring_lines))
+        body_lines = function_body.split('\n')
+        indented_body = '\n'.join('    ' + line if line.strip() else '' for line in body_lines)
+        
+        complete_code = f"""{chr(10).join(imports)}
+
+
+{decorator}
+def {function_name}({", ".join(param_list)}) -> {return_type}:
+{indented_docstring}
+{indented_body}
+"""
+        return complete_code, "✅ Code generated successfully!"
+    except Exception as e:
+        return "", f"❌ Error: {str(e)}"
+
+
+def validate_tool_code(code: str) -> str:
+    """Validate Python syntax and Strands requirements."""
+    if not code.strip():
+        return "❌ No code provided"
+    issues = []
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        issues.append(f"Syntax Error (line {e.lineno}): {e.msg}")
+    if "@tool" not in code:
+        issues.append("Missing @tool decorator")
+    if "@tool" in code and "from strands import tool" not in code and "import strands" not in code:
+        issues.append("Missing strands import")
+    if "def " not in code:
+        issues.append("No function definition")
+    if '"""' not in code and "'''" not in code:
+        issues.append("Missing docstring (recommended)")
+    if issues:
+        return "⚠️ Issues:\n" + "\n".join(f"  • {issue}" for issue in issues)
+    return "✅ All validation checks passed!"
+
+
+def preview_tool_spec(code: str) -> str:
+    """Generate a preview of how the tool will appear to agents."""
+    try:
+        tree = ast.parse(code)
+        tool_info = {"tool_name": "unknown", "description": "", "parameters": [], "return_type": "Any"}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                tool_info["tool_name"] = node.name
+                if ast.get_docstring(node):
+                    tool_info["description"] = ast.get_docstring(node).split('\n')[0]
+                for arg in node.args.args:
+                    param_type = ast.unparse(arg.annotation) if arg.annotation else "Any"
+                    tool_info["parameters"].append({"name": arg.arg, "type": param_type})
+                if node.returns:
+                    tool_info["return_type"] = ast.unparse(node.returns)
+                break
+        
+        preview = f"**Tool:** `{tool_info['tool_name']}`\n**Description:** {tool_info['description']}\n**Parameters:**\n"
+        if tool_info["parameters"]:
+            for p in tool_info["parameters"]:
+                preview += f"  • `{p['name']}`: {p['type']}\n"
+        else:
+            preview += "  • No parameters\n"
+        preview += f"\n**Returns:** `{tool_info['return_type']}`"
+        return preview
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+def save_tool_tc(tool_name: str, description: str, complete_code: str, parameters_json: str) -> Tuple[str, gr.Dropdown]:
+    """Save the tool to disk."""
+    try:
+        if not tool_name:
+            return "❌ Tool name required", gr.Dropdown()
+        if not complete_code:
+            return "❌ No code to save", gr.Dropdown()
+        
+        validation = validate_tool_code(complete_code)
+        if not validation.startswith("✅"):
+            return f"❌ Validation failed:\n{validation}", gr.Dropdown()
+        
+        params = json.loads(parameters_json) if parameters_json else []
+        params_schema = {"type": "object", "properties": {}, "required": []}
+        for p in params:
+            type_map = {"str": "string", "int": "integer", "float": "number", "bool": "boolean", "list": "array", "dict": "object"}
+            json_type = type_map.get(p["type_annotation"].lower().split("[")[0], "string")
+            params_schema["properties"][p["name"]] = {"type": json_type, "description": p.get("description", "")}
+            if p["required"]:
+                params_schema["required"].append(p["name"])
+        
+        config = ToolConfig(
+            name=tool_name,
+            description=description,
+            function_code=complete_code,
+            parameters_schema=params_schema,
+            returns_schema={"type": "string"}
+        )
+        
+        result = tool_manager.create_tool(config)
+        if result["success"]:
+            return f"✅ Tool saved!\n**JSON:** `{result['filepath']}`\n**Python:** `{result['python_file']}`", refresh_tool_list_tc()
+        return f"❌ {result['error']}", gr.Dropdown()
+    except Exception as e:
+        return f"❌ Error: {str(e)}", gr.Dropdown()
+
+
+def load_tool_tc(tool_name: str) -> Tuple:
+    """Load a tool from disk into the editor."""
+    try:
+        if not tool_name:
+            return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", "No tool selected")
+        
+        result = tool_manager.load_tool(tool_name)
+        if not result["success"]:
+            return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ {result['error']}")
+        
+        config = result["config"]
+        tree = ast.parse(config.function_code)
+        function_name, parameters, return_type, function_body = "", [], "str", "pass"
+        enable_context, context_param = False, "tool_context"
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                function_name = node.name
+                for arg in node.args.args:
+                    param_type = ast.unparse(arg.annotation) if arg.annotation else "str"
+                    if arg.arg in ["tool_context", "context"] and "dict" in param_type.lower():
+                        enable_context, context_param = True, arg.arg
+                    else:
+                        parameters.append({"name": arg.arg, "type_annotation": param_type, "description": "", "required": True, "default_value": ""})
+                if node.returns:
+                    return_type = ast.unparse(node.returns)
+                body_lines = [ast.unparse(stmt) for stmt in node.body if not (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant))]
+                function_body = '\n'.join(body_lines)
+                break
+        
+        return (config.name, config.description, function_name, json.dumps(parameters, indent=2), return_type, "", 
+                function_body, enable_context, context_param, "", "", False, "{}", f"✅ Loaded: {tool_name}")
+    except Exception as e:
+        return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ Error: {str(e)}")
+
+
+def delete_tool_tc(tool_name: str) -> Tuple[str, gr.Dropdown]:
+    """Delete a tool from disk."""
+    if not tool_name:
+        return "❌ No tool selected", gr.Dropdown()
+    result = tool_manager.delete_tool(tool_name, delete_file=True)
+    if result["success"]:
+        return f"✅ '{tool_name}' deleted", refresh_tool_list_tc()
+    return f"❌ {result['error']}", gr.Dropdown()
+
+
+# ============================================================================
+# UI CREATION
+# ============================================================================
+
+def create_agent_creator_ui():
+    """Create the complete Agent Creator + Tool Creator UI with tabs."""
+    
+    with gr.Blocks(title="Strands SDK - Agent & Tool Creator") as interface:
+        gr.Markdown("# 🚀 Strands SDK - Agent & Tool Creator")
+        gr.Markdown("Comprehensive interface for creating AI agents and tools")
+        
+        with gr.Tabs():
+            # ========================= AGENT CREATOR TAB =========================
+            with gr.Tab("🤖 Agent Creator"):
                 with gr.Row():
-                    load_btn = gr.Button("📂 Load", size="sm")
-                    delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
-                
-                gr.Markdown("### Quick Presets")
-                preset_dropdown = gr.Dropdown(
-                    choices=list(PRESETS.keys()),
-                    label="Apply Preset",
-                    value="Custom",
+                    # Left sidebar - Agent Library
+                    with gr.Column(scale=1):
+                        gr.Markdown("## 📚 Agent Library")
+                        
+                        agent_list = gr.Dropdown(
+                            choices=get_saved_agents(),
+                            label="Saved Agents",
+                            interactive=True,
+                            value=None
+                        )
+                        
+                        with gr.Row():
+                            load_btn = gr.Button("📂 Load", size="sm")
+                            delete_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
+                        
+                        gr.Markdown("### 📝 Prompt Templates")
+                        gr.Markdown("*Model-specific prompt formats*")
+                        template_dropdown = gr.Dropdown(
+                            choices=list(PROMPT_TEMPLATES.keys()),
+                    label="Select Template",
+                    value=None,
                     interactive=True
                 )
                 
-                apply_preset_btn = gr.Button("✨ Apply Preset", size="sm")
+                apply_template_btn = gr.Button("✨ Apply Template", size="sm")
                 
                 gr.Markdown("---")
                 
@@ -550,25 +841,11 @@ def create_agent_creator_ui():
         
         # Event Handlers
         
-        # Apply preset
-        apply_preset_btn.click(
-            fn=apply_preset,
-            inputs=[preset_dropdown],
-            outputs=[
-                agent_description,
-                system_prompt,
-                temperature,
-                max_tokens,
-                top_p,
-                top_k,
-                repetition_penalty,
-                conv_manager_type,
-                window_size,
-                truncate_results,
-                summary_ratio,
-                preserve_recent,
-                custom_summary_prompt,
-            ]
+        # Apply prompt template
+        apply_template_btn.click(
+            fn=apply_prompt_template,
+            inputs=[template_dropdown],
+            outputs=[system_prompt]
         )
         
         # Load agent
@@ -592,10 +869,10 @@ def create_agent_creator_ui():
                 summary_ratio,
                 preserve_recent,
                 custom_summary_prompt,
-            ]
+                ]
         )
-        
-        # Save agent
+            
+            # Save agent
         save_btn.click(
             fn=save_agent,
             inputs=[
@@ -618,7 +895,7 @@ def create_agent_creator_ui():
             ],
             outputs=[status_message, agent_list]
         )
-        
+            
         # Delete agent
         delete_btn.click(
             fn=delete_agent,
@@ -652,6 +929,88 @@ def create_agent_creator_ui():
             inputs=[conv_manager_type],
             outputs=[window_size, truncate_results, summary_ratio, preserve_recent, custom_summary_prompt]
         )
+    
+        # ========================= TOOL CREATOR TAB =========================
+        with gr.Tab("🛠️ Tool Creator"):
+            gr.Markdown("### Create production-ready Strands SDK tools")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("## 📚 Tool Library")
+                    tool_list_tc = gr.Dropdown(choices=tool_manager.list_saved_tools(), label="Saved Tools")
+                    with gr.Row():
+                        refresh_tc_btn = gr.Button("🔄", size="sm")
+                        load_tc_btn = gr.Button("📂 Load", size="sm", variant="primary")
+                    clear_tc_btn = gr.Button("🆕 Clear", size="sm")
+                    delete_tc_btn = gr.Button("🗑️ Delete", size="sm", variant="stop")
+                    tc_status = gr.Markdown("Ready!")
+                
+                with gr.Column(scale=3):
+                    with gr.Group():
+                        gr.Markdown("### 🎯 Tool Identity")
+                        with gr.Row():
+                            tc_tool_name = gr.Textbox(label="Tool Name", placeholder="my_tool")
+                            tc_function_name = gr.Textbox(label="Function Name", placeholder="my_tool")
+                        tc_description = gr.Textbox(label="Description", lines=2)
+                    
+                    with gr.Group():
+                        gr.Markdown("### 📋 Parameters (JSON)")
+                        tc_parameters = gr.Textbox(label="Parameters", value="[]", lines=6)
+                        gr.Markdown('**Example:** `[{"name": "text", "type_annotation": "str", "description": "Input text", "required": true, "default_value": ""}]`')
+                    
+                    with gr.Group():
+                        gr.Markdown("### 🔄 Return Type")
+                        with gr.Row():
+                            tc_return_type = gr.Dropdown(choices=TYPE_ANNOTATIONS, value="str", label="Return Type")
+                            tc_return_desc = gr.Textbox(label="Return Description")
+                    
+                    with gr.Accordion("⚙️ Advanced", open=False):
+                        with gr.Row():
+                            tc_enable_context = gr.Checkbox(label="Enable Context Param")
+                            tc_context_param = gr.Textbox(label="Context Param Name", value="tool_context")
+                        with gr.Row():
+                            tc_custom_name = gr.Textbox(label="Custom Name Override")
+                            tc_custom_desc = gr.Textbox(label="Custom Description Override")
+                        with gr.Row():
+                            tc_enable_schema = gr.Checkbox(label="Custom Input Schema")
+                            tc_custom_schema = gr.Textbox(label="Schema JSON", value="{}", lines=3)
+                    
+                    with gr.Group():
+                        gr.Markdown("### 💻 Implementation")
+                        tc_template = gr.Dropdown(choices=list(CODE_TEMPLATES.keys()), value="Basic Template", label="Template")
+                        tc_gen_skeleton_btn = gr.Button("🏗️ Generate Skeleton", variant="secondary")
+                        tc_function_body = gr.Code(label="Function Body", language="python", lines=12, value=CODE_TEMPLATES["Basic Template"])
+                    
+                    with gr.Group():
+                        gr.Markdown("### ✨ Generate Complete Code")
+                        tc_gen_code_btn = gr.Button("Generate Complete Tool Code", variant="primary", size="lg")
+                        tc_gen_status = gr.Textbox(label="Status")
+                        tc_complete_code = gr.Code(label="Complete Tool Code", language="python", lines=15)
+                    
+                    with gr.Row():
+                        with gr.Column():
+                            tc_validate_btn = gr.Button("🔍 Validate")
+                            tc_validation = gr.Textbox(label="Validation", lines=4)
+                        with gr.Column():
+                            tc_preview_btn = gr.Button("👀 Preview")
+                            tc_preview = gr.Markdown("No preview")
+                    
+                    with gr.Group():
+                        gr.Markdown("### 💾 Save Tool")
+                        tc_save_btn = gr.Button("💾 Save Tool", variant="primary", size="lg")
+                        tc_save_output = gr.Markdown("Not saved yet")
+            
+            # Tool Creator Event Handlers
+            tc_tool_name.change(fn=auto_populate_function_name, inputs=[tc_tool_name], outputs=[tc_function_name])
+            refresh_tc_btn.click(fn=refresh_tool_list_tc, outputs=[tool_list_tc])
+            tc_gen_skeleton_btn.click(fn=generate_function_skeleton, inputs=[tc_function_name, tc_parameters, tc_return_type, tc_enable_context, tc_context_param, tc_template], outputs=[tc_function_body])
+            tc_gen_code_btn.click(fn=generate_complete_tool_code, inputs=[tc_tool_name, tc_description, tc_function_name, tc_parameters, tc_return_type, tc_return_desc, tc_function_body, tc_enable_context, tc_context_param, tc_custom_name, tc_custom_desc, tc_enable_schema, tc_custom_schema], outputs=[tc_complete_code, tc_gen_status])
+            tc_validate_btn.click(fn=validate_tool_code, inputs=[tc_complete_code], outputs=[tc_validation])
+            tc_preview_btn.click(fn=preview_tool_spec, inputs=[tc_complete_code], outputs=[tc_preview])
+            tc_save_btn.click(fn=save_tool_tc, inputs=[tc_tool_name, tc_description, tc_complete_code, tc_parameters], outputs=[tc_save_output, tool_list_tc])
+            load_tc_btn.click(fn=load_tool_tc, inputs=[tool_list_tc], outputs=[tc_tool_name, tc_description, tc_function_name, tc_parameters, tc_return_type, tc_return_desc, tc_function_body, tc_enable_context, tc_context_param, tc_custom_name, tc_custom_desc, tc_enable_schema, tc_custom_schema, tc_status])
+            clear_tc_btn.click(fn=lambda: ("", "", "", "[]", "str", "", CODE_TEMPLATES["Basic Template"], False, "tool_context", "", "", False, "{}", "", "Cleared"), outputs=[tc_tool_name, tc_description, tc_function_name, tc_parameters, tc_return_type, tc_return_desc, tc_function_body, tc_enable_context, tc_context_param, tc_custom_name, tc_custom_desc, tc_enable_schema, tc_custom_schema, tc_complete_code, tc_status])
+            delete_tc_btn.click(fn=delete_tool_tc, inputs=[tool_list_tc], outputs=[tc_status, tool_list_tc])
     
     return interface
 

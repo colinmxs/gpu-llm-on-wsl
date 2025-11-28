@@ -51,11 +51,15 @@ A Dockerized environment for running quantized large language models (LLMs) with
         ```
         Open `http://localhost:8000/docs` for API documentation. See [API_SETUP.md](API_SETUP.md) for detailed usage.
 
-    -   **Agent Creator (NEW)**: Create and manage Strands SDK agents with a comprehensive UI.
+    -   **Agent & Tool Creator**: Create and manage Strands SDK agents and tools in one unified interface.
         ```bash
         docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/strands_agents/examples/agents -v C:\path\to\tools:/app/strands_agents/examples/tools -it llm-docker python /app/frontend/agent_creator_gradio.py
         ```
-        Open `http://localhost:7861` in your browser. See [frontend/AGENT_CREATOR_README.md](frontend/AGENT_CREATOR_README.md) for detailed documentation.
+        Open `http://localhost:7861` in your browser. Use the tabs to switch between:
+        - **🤖 Agent Creator**: Configure agents with models, tools, and conversation management
+        - **🛠️ Tool Creator**: Create production-ready tools with visual code generation
+        
+        See [frontend/AGENT_CREATOR_README.md](frontend/AGENT_CREATOR_README.md) for agent documentation.
     
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
