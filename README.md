@@ -45,18 +45,18 @@ A Dockerized environment for running quantized large language models (LLMs) with
         ```
         Open `http://localhost:7860` in your browser.
 
-    -   **FastAPI Server (NEW)**: Run the inference API for local development.
+    -   **FastAPI Server**: Run the inference API for local development.
         ```bash
         docker run --gpus all -p 8000:8000 -v C:\path\to\models:/app/models -it llm-docker python -m api.server
         ```
         Open `http://localhost:8000/docs` for API documentation. See [API_SETUP.md](API_SETUP.md) for detailed usage.
 
-    -   **Agent Playground**: Build and test Strands SDK agents with tools.
+    -   **Agent Creator (NEW)**: Create and manage Strands SDK agents with a comprehensive UI.
         ```bash
-        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker python /app/frontend/agent_playground.py
+        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/strands_agents/examples/agents -v C:\path\to\tools:/app/strands_agents/examples/tools -it llm-docker python /app/frontend/agent_creator_gradio.py
         ```
-        Open `http://localhost:7861` in your browser. Mount `/app/tools` to persist tool definitions.
-
+        Open `http://localhost:7861` in your browser. See [frontend/AGENT_CREATOR_README.md](frontend/AGENT_CREATOR_README.md) for detailed documentation.
+    
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
         docker run --gpus all -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker
