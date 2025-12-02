@@ -34,14 +34,19 @@ Open your browser to:
 - API Documentation: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
 
-Or use the Python client:
+Or use the Python clients:
 
 ```bash
 # On your host machine
+
+# Test basic LLM inference
 python api/client_example.py
+
+# Test agent and tool management
+python api/client_agents_tools_example.py
 ```
 
-See [api/README.md](api/README.md) for detailed API documentation.
+See [api/README.md](api/README.md) for detailed API documentation and [api/ENDPOINTS.md](api/ENDPOINTS.md) for a quick reference of all endpoints.
 
 ## Environment Variables
 
@@ -51,3 +56,5 @@ Configure the API server with these environment variables:
 - `API_HOST` - Host to bind (default: 0.0.0.0)
 - `MODELS_DIR` - Models directory (default: /app/models)
 - `CACHE_DIR` - HuggingFace cache (default: /app/cache)
+- `AGENTS_DIR` - Agents directory (default: /app/agents)
+- `TOOLS_DIR` - Tools directory (default: /app/tools)

@@ -10,3 +10,6 @@ python-multipart==0.0.20
 
 # Requests for client example
 requests>=2.31.0
+
+# Strands SDK for agent management
+strands-agents>=1.0.0
