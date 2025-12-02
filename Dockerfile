@@ -57,23 +57,10 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 RUN mkdir -p /app/models /app/cache /app/agents /app/tools
 
-# Copy shared modules first (used by all components)
-COPY shared /app/shared
-
-# Install Strands Agents SDK and dependencies
-COPY strands_agents/requirements.txt /tmp/strands-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/strands-requirements.txt
-COPY strands_agents /app/strands_agents
-
 # Install API dependencies
 COPY api/requirements.txt /tmp/api-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/api-requirements.txt
 COPY api /app/api
-
-# Install Frontend dependencies
-COPY frontend/requirements.txt /tmp/frontend-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/frontend-requirements.txt
-COPY frontend /app/frontend
 
 # Install Notebook dependencies
 COPY notebooks/requirements.txt /tmp/notebooks-requirements.txt

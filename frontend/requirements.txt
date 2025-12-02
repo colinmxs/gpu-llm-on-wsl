@@ -6,6 +6,3 @@ gradio==6.0.1
 
 # HTTP client for API requests
 requests>=2.31.0
-
-# Note: No PyTorch, transformers, or strands-agents dependencies needed!
-# The frontend communicates with the backend API server which handles all model operations.

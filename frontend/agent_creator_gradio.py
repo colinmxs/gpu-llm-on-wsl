@@ -3,6 +3,8 @@ Gradio Frontend for Strands Agent Creator & Tool Creator
 
 This module provides a comprehensive UI for creating and managing Strands SDK agents and tools.
 Includes both Agent Creator and Tool Creator in a single tabbed interface.
+
+Uses API for model management and local strands_agents for agent/tool management.
 """
 
 import gradio as gr
@@ -12,7 +14,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.client_agents_tools_example import AgentToolClient
+from frontend.local_manager_wrapper import LocalManagerWrapper
 
 # Import tab modules
 from frontend.agent_creator_tab import AgentCreatorTab
@@ -21,29 +23,29 @@ from frontend.agent_playground_tab import AgentPlaygroundTab
 
 
 # Initialize managers
-# API client will communicate with the backend API server
+# Manager wrapper will use API for models, local code for agents/tools
 API_BASE_URL = "http://localhost:8000"
 
-# Global API client instance
-api_client = None
+# Global manager instance
+manager = None
 
-def initialize_api_client(api_url: str = API_BASE_URL):
-    """Initialize or reinitialize API client with the specified URL."""
-    global api_client
-    api_client = AgentToolClient(base_url=api_url)
-    return api_client
+def initialize_manager(api_url: str = API_BASE_URL):
+    """Initialize or reinitialize manager with the specified API URL."""
+    global manager
+    manager = LocalManagerWrapper(api_base_url=api_url)
+    return manager
 
 # Initialize with default
-initialize_api_client()
+initialize_manager()
 
 
 def create_agent_creator_ui():
     """Create the complete Agent Creator + Tool Creator + Agent Playground UI with tabs."""
     
-    # Initialize tab instances with API client
-    agent_tab = AgentCreatorTab(api_client)
-    tool_tab = ToolCreatorTab(api_client)
-    playground_tab = AgentPlaygroundTab(api_client)
+    # Initialize tab instances with manager
+    agent_tab = AgentCreatorTab(manager)
+    tool_tab = ToolCreatorTab(manager)
+    playground_tab = AgentPlaygroundTab(manager)
     
     with gr.Blocks(title="Strands SDK - Agent & Tool Creator") as interface:
         gr.Markdown("# 🚀 Strands SDK - Agent & Tool Creator")
@@ -63,13 +65,13 @@ def create_agent_creator_ui():
             api_status = gr.Markdown(f"**API URL:** `{API_BASE_URL}`")
             
             def update_api_url(api_url: str):
-                """Update the API client URL."""
-                initialize_api_client(api_url)
+                """Update the API URL."""
+                initialize_manager(api_url)
                 
-                # Update tab instances with new API client
-                agent_tab.api_client = api_client
-                tool_tab.api_client = api_client
-                playground_tab.api_client = api_client
+                # Update tab instances with new manager
+                agent_tab.manager = manager
+                tool_tab.manager = manager
+                playground_tab.manager = manager
                 
                 status = f"**API URL:** `{api_url}`"
                 return status

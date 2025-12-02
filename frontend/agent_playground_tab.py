@@ -13,13 +13,13 @@ from pathlib import Path
 class AgentPlaygroundTab:
     """Manages the Agent Playground tab UI and functionality."""
     
-    def __init__(self, api_client: AgentToolClient):
-        self.api_client = api_client
+    def __init__(self, manager):
+        self.manager = manager
     
     def get_saved_agents(self) -> List[str]:
         """Get list of saved agents from API."""
         try:
-            agents = self.api_client.list_saved_agents()
+            agents = self.manager.list_saved_agents()
             return agents if agents else ["No agents saved"]
         except Exception as e:
             print(f"Error fetching agents: {e}")
@@ -35,7 +35,7 @@ class AgentPlaygroundTab:
         if not agent_name or agent_name == "No agents saved":
             return "No agent selected", "", "⚠️ Please select an agent"
         
-        agent_info = self.api_client.get_agent_info(agent_name)
+        agent_info = self.manager.get_agent_info(agent_name)
         
         if not agent_info.get("exists"):
             return f"❌ Agent '{agent_name}' not found", "", f"❌ Agent not found"
@@ -65,7 +65,7 @@ class AgentPlaygroundTab:
         # Model status
         model_loaded = agent_info.get('model_loaded', False)
         try:
-            status_response = self.api_client._request("GET", "/status")
+            status_response = self.manager._request("GET", "/status")
             current_model = status_response.get("current_model")
         except:
             current_model = None
@@ -97,7 +97,7 @@ class AgentPlaygroundTab:
             return "No agent selected", "", "⚠️ Please select an agent first"
         
         try:
-            agent_info = self.api_client.get_agent_info(agent_name)
+            agent_info = self.manager.get_agent_info(agent_name)
         except Exception as e:
             return f"❌ Error: {str(e)}", "", "❌ API error"
         
@@ -110,7 +110,7 @@ class AgentPlaygroundTab:
         
         # Check if correct model is already loaded
         try:
-            status_response = self.api_client._request("GET", "/status")
+            status_response = self.manager._request("GET", "/status")
             current_model = status_response.get("current_model")
         except:
             current_model = None
@@ -123,7 +123,7 @@ class AgentPlaygroundTab:
         
         # Attempt to load the model via API
         try:
-            result = self.api_client._request("POST", "/model/load", json={
+            result = self.manager._request("POST", "/model/load", json={
                 "model_name": required_model,
                 "quantization": "4-bit (NF4)"
             })
@@ -140,7 +140,7 @@ class AgentPlaygroundTab:
     def get_model_status(self) -> str:
         """Get current model loading status."""
         try:
-            status_response = self.api_client._request("GET", "/status")
+            status_response = self.manager._request("GET", "/status")
             model_loaded = status_response.get("model_loaded", False)
             
             if model_loaded:
@@ -226,8 +226,8 @@ class AgentPlaygroundTab:
                 if i+1 < len(history):
                     tuple_history.append((history[i]["content"], history[i+1]["content"]))
             
-            # Stream from agent via API - using SSE streaming
-            for event in self.api_client.chat_with_agent_stream(agent_name, message, [list(t) for t in tuple_history]):
+            # Stream from agent - using local manager with sync streaming
+            for event in self.manager.chat_with_agent_stream(agent_name, message, tuple_history):
                 # Error handling
                 if "error" in event:
                     error_msg = event.get("error", "Unknown error")

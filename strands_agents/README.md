@@ -3,14 +3,12 @@
 **Example:**
 ```python
 from pathlib import Path
-from shared.model_manager import ModelManager
 from strands_agents.agent_manager import AgentManager
 
-# Initialize
-model_manager = ModelManager(models_dir=Path("./models"))
+# Initialize with API base URL
 agent_manager = AgentManager(
     agents_dir=Path("./agents"),
-    model_manager=model_manager,
+    api_base_url="http://localhost:8000",
     tools_dir=Path("./tools")
 )
 
@@ -37,18 +35,18 @@ for event in agent_manager.chat_with_agent(
         print(f"\n[{event['tokens_per_second']:.1f} tokens/sec]")
 ```
 
-### 2. HuggingFaceLocalModel (`huggingface_local_model.py`)
+### 2. APIModelAdapter (`api_model_adapter.py`)
 
-Custom Strands model provider that bridges `ModelManager` with Strands SDK.
+API-based Strands model provider that uses the API server for inference (avoids heavy local dependencies).
 
 **Example:**
 ```python
-from strands_agents.huggingface_local_model import HuggingFaceLocalModel
+from strands_agents.api_model_adapter import APIModelAdapter
 from strands.agent import Agent
 
 # Create model provider
-model = HuggingFaceLocalModel(
-    model_manager=model_manager,
+model = APIModelAdapter(
+    api_base_url="http://localhost:8000",
     temperature=0.7,
     max_tokens=500
 )

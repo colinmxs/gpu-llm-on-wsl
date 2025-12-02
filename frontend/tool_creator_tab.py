@@ -76,8 +76,8 @@ except Exception as e:
 class ToolCreatorTab:
     """Manages the Tool Creator tab UI and functionality."""
     
-    def __init__(self, api_client: AgentToolClient):
-        self.api_client = api_client
+    def __init__(self, manager):
+        self.manager = manager
     
     def to_snake_case(self, text: str) -> str:
         """Convert text to snake_case for valid Python identifiers."""
@@ -89,7 +89,7 @@ class ToolCreatorTab:
     def refresh_tool_list(self) -> gr.Dropdown:
         """Refresh tool list for tool creator."""
         try:
-            tools = self.api_client.list_saved_tools()
+            tools = self.manager.list_saved_tools()
         except Exception as e:
             print(f"Error fetching tools: {e}")
             tools = []
@@ -269,7 +269,7 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
                     params_schema["required"].append(p["name"])
             
             try:
-                result = self.api_client.create_tool(
+                result = self.manager.create_tool(
                     name=tool_name,
                     description=description,
                     function_code=complete_code,
@@ -291,7 +291,7 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
                 return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", "No tool selected")
             
             try:
-                result = self.api_client.load_tool(tool_name)
+                result = self.manager.load_tool(tool_name)
             except Exception as e:
                 return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ {str(e)}")
                 
@@ -300,7 +300,7 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
             
             # Get tool info to get the config
             try:
-                tool_info = self.api_client.get_tool_info(tool_name)
+                tool_info = self.manager.get_tool_info(tool_name)
                 config_dict = {
                     "name": tool_info["name"],
                     "description": tool_info["description"],
@@ -345,7 +345,7 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
         if not tool_name:
             return "❌ No tool selected", gr.Dropdown()
         try:
-            result = self.api_client.delete_tool(tool_name, delete_file=True)
+            result = self.manager.delete_tool(tool_name, delete_file=True)
         except Exception as e:
             return f"❌ Error: {str(e)}", gr.Dropdown()
         if result["success"]:
@@ -360,7 +360,7 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
             with gr.Column(scale=1):
                 gr.Markdown("## 📚 Tool Library")
                 try:
-                    initial_tools = self.api_client.list_saved_tools()
+                    initial_tools = self.manager.list_saved_tools()
                 except:
                     initial_tools = []
                 tool_list_tc = gr.Dropdown(choices=initial_tools, label="Saved Tools")

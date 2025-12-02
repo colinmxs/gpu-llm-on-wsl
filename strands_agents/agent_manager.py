@@ -4,54 +4,47 @@ Agent Manager - Backend logic for Strands SDK agent creation, management, and ex
 This module provides a clean interface for managing Strands SDK agents,
 handling agent configuration, persistence, and execution independently of UI concerns.
 
-Fully Strands-native implementation using Agent class, custom Model adapter,
-and built-in conversation management. Agent serialization is handled manually
-as the Agent class doesn't provide to_dict/from_dict methods.
+Fully Strands-native implementation using Agent class with API-based model adapter.
+Agent serialization is handled manually as the Agent class doesn't provide to_dict/from_dict methods.
 """
 
 import json
 import asyncio
 from pathlib import Path
 from typing import Optional, Dict, Any, Generator, List, Tuple
-import sys
 
 from strands.agent import Agent
 from strands.types.content import Messages
 
-# Import from shared
-sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
-from model_manager import ModelManager
-
-# Import Strands model adapter from local module
+# Import API-based model adapter
 try:
-    from .huggingface_local_model import HuggingFaceLocalModel
+    from .api_model_adapter import APIModelAdapter
 except ImportError:
     # Fallback for when imported as top-level module
-    from huggingface_local_model import HuggingFaceLocalModel
+    from api_model_adapter import APIModelAdapter
 
 
 class AgentManager:
     """
     Manages Strands SDK agents including creation, loading, saving, and execution.
     
-    Fully Strands-native implementation:
-    - Uses Agent class properly with custom HuggingFaceLocalModel
-    - Uses custom JSON serialization for persistence (Agent lacks to_dict/from_dict)
+    Uses API-based model adapter to avoid heavy local dependencies (torch, transformers, pydantic).
+    - Uses Agent class with APIModelAdapter for inference via API
+    - Uses custom JSON serialization for persistence
     - Uses Agent.stream_async() for chat with native tool execution
-    - Maintains minimal adapter code between model_manager and Strands
     """
-    def __init__(self, agents_dir: Path, model_manager: ModelManager, tools_dir: Optional[Path] = None):
+    def __init__(self, agents_dir: Path, api_base_url: str, tools_dir: Optional[Path] = None):
         """
         Initialize the AgentManager.
         
         Args:
             agents_dir: Directory where agent configurations are stored
-            model_manager: ModelManager instance for LLM inference
+            api_base_url: Base URL of the API server for model operations
             tools_dir: Directory where tools are stored (for Strands to load)
         """
         self.agents_dir = Path(agents_dir)
         self.agents_dir.mkdir(parents=True, exist_ok=True)
-        self.model_manager = model_manager
+        self.api_base_url = api_base_url
         self.tools_dir = Path(tools_dir) if tools_dir else None
         
         # Cache of active Strands Agent instances
@@ -123,18 +116,18 @@ class AgentManager:
         
         return tools_list if tools_list else None
     
-    def _create_model_provider(self, model_config: Dict[str, Any]) -> HuggingFaceLocalModel:
+    def _create_model_provider(self, model_config: Dict[str, Any]) -> APIModelAdapter:
         """
-        Create HuggingFaceLocalModel provider with configuration.
+        Create API-based model adapter with configuration.
         
         Args:
             model_config: Dictionary with model parameters
             
         Returns:
-            HuggingFaceLocalModel instance
+            APIModelAdapter instance
         """
-        return HuggingFaceLocalModel(
-            model_manager=self.model_manager,
+        return APIModelAdapter(
+            api_base_url=self.api_base_url,
             temperature=model_config.get("temperature", 0.7),
             max_tokens=model_config.get("max_tokens", 500),
             top_p=model_config.get("top_p", 0.9),

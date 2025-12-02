@@ -6,13 +6,7 @@ This module provides the UI components and functionality for creating and managi
 
 import gradio as gr
 import json
-import sys
-from pathlib import Path
 from typing import List, Tuple
-
-# Add parent directory to path for API client import
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from api.client_agents_tools_example import AgentToolClient
 
 
 PROMPT_TEMPLATES = {
@@ -35,32 +29,31 @@ You are a helpful AI assistant.<|eot_id|><|start_header_id|>user<|end_header_id|
 class AgentCreatorTab:
     """Manages the Agent Creator tab UI and functionality."""
     
-    def __init__(self, api_client: AgentToolClient):
-        self.api_client = api_client
+    def __init__(self, manager):
+        self.manager = manager
     
     def get_available_models(self) -> List[str]:
         """Get list of available models from API."""
         try:
-            response = self.api_client._request("GET", "/models")
-            models = response if response else []
+            models = self.manager.list_models()
             return models if models else ["No models found"]
         except Exception as e:
             print(f"Error fetching models: {e}")
             return ["No models found"]
     
     def get_available_tools(self) -> List[str]:
-        """Get list of available tools from API."""
+        """Get list of available tools."""
         try:
-            tools = self.api_client.list_saved_tools()
+            tools = self.manager.list_saved_tools()
             return tools if tools else []
         except Exception as e:
             print(f"Error fetching tools: {e}")
             return []
     
     def get_saved_agents(self) -> List[str]:
-        """Get list of saved agents from API."""
+        """Get list of saved agents."""
         try:
-            agents = self.api_client.list_saved_agents()
+            agents = self.manager.list_saved_agents()
             return agents if agents else ["No agents saved"]
         except Exception as e:
             print(f"Error fetching agents: {e}")
@@ -96,7 +89,7 @@ class AgentCreatorTab:
             return default_values
         
         try:
-            agent_info = self.api_client.get_agent_info(agent_name)
+            agent_info = self.manager.get_agent_info(agent_name)
         except Exception as e:
             print(f"Error loading agent: {e}")
             return default_values
@@ -152,7 +145,7 @@ class AgentCreatorTab:
         
         # Create agent via API
         try:
-            result = self.api_client.create_agent(
+            result = self.manager.create_agent(
                 name=name,
                 description=description,
                 system_prompt=system_prompt,
@@ -180,7 +173,7 @@ class AgentCreatorTab:
             return "❌ Error: Please select an agent to delete", gr.update()
         
         try:
-            result = self.api_client.delete_agent(agent_name, delete_file=True)
+            result = self.manager.delete_agent(agent_name, delete_file=True)
         except Exception as e:
             return f"❌ Error: {str(e)}", gr.update()
         
@@ -196,7 +189,7 @@ class AgentCreatorTab:
             return json.dumps({"error": "No agent selected"}, indent=2)
         
         try:
-            agent_info = self.api_client.get_agent_info(agent_name)
+            agent_info = self.manager.get_agent_info(agent_name)
         except Exception as e:
             return json.dumps({"error": f"API error: {str(e)}"}, indent=2)
         
@@ -222,7 +215,7 @@ class AgentCreatorTab:
     def get_model_status(self) -> str:
         """Get current model loading status."""
         try:
-            status_response = self.api_client._request("GET", "/status")
+            status_response = self.manager._request("GET", "/status")
             model_loaded = status_response.get("model_loaded", False)
             
             if model_loaded:
@@ -252,7 +245,7 @@ class AgentCreatorTab:
         info_parts = []
         for tool_name in tool_names:
             try:
-                tool_info = self.api_client.get_tool_info(tool_name)
+                tool_info = self.manager.get_tool_info(tool_name)
             except Exception as e:
                 continue
             if tool_info.get("exists"):
