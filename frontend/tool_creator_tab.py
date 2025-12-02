@@ -79,8 +79,8 @@ except Exception as e:
 class ToolCreatorTab:
     """Manages the Tool Creator tab UI and functionality."""
     
-    def __init__(self, tool_manager: ToolManager):
-        self.tool_manager = tool_manager
+    def __init__(self, api_client: AgentToolClient):
+        self.api_client = api_client
     
     def to_snake_case(self, text: str) -> str:
         """Convert text to snake_case for valid Python identifiers."""
@@ -91,7 +91,11 @@ class ToolCreatorTab:
     
     def refresh_tool_list(self) -> gr.Dropdown:
         """Refresh tool list for tool creator."""
-        tools = self.tool_manager.list_saved_tools()
+        try:
+            tools = self.api_client.list_saved_tools()
+        except Exception as e:
+            print(f"Error fetching tools: {e}")
+            tools = []
         return gr.Dropdown(choices=tools, value=None)
     
     def auto_populate_function_name(self, tool_name: str) -> str:
@@ -267,15 +271,16 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
                 if p["required"]:
                     params_schema["required"].append(p["name"])
             
-            config = ToolConfig(
-                name=tool_name,
-                description=description,
-                function_code=complete_code,
-                parameters_schema=params_schema,
-                returns_schema={"type": "string"}
-            )
-            
-            result = self.tool_manager.create_tool(config)
+            try:
+                result = self.api_client.create_tool(
+                    name=tool_name,
+                    description=description,
+                    function_code=complete_code,
+                    parameters_schema=params_schema,
+                    returns_schema={"type": "string"}
+                )
+            except Exception as e:
+                return f"❌ Error: {str(e)}", gr.Dropdown()
             if result["success"]:
                 return f"✅ Tool saved!\n**JSON:** `{result['filepath']}`\n**Python:** `{result['python_file']}`", self.refresh_tool_list()
             return f"❌ {result['error']}", gr.Dropdown()
@@ -288,11 +293,32 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
             if not tool_name:
                 return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", "No tool selected")
             
-            result = self.tool_manager.load_tool(tool_name)
+            try:
+                result = self.api_client.load_tool(tool_name)
+            except Exception as e:
+                return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ {str(e)}")
+                
             if not result["success"]:
                 return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ {result['error']}")
             
-            config = result["config"]
+            # Get tool info to get the config
+            try:
+                tool_info = self.api_client.get_tool_info(tool_name)
+                config_dict = {
+                    "name": tool_info["name"],
+                    "description": tool_info["description"],
+                    "function_code": tool_info["function_code"],
+                    "parameters_schema": tool_info.get("parameters_schema", {}),
+                    "returns_schema": tool_info.get("returns_schema", {})
+                }
+                # Create a simple object to hold the config
+                class Config:
+                    def __init__(self, d):
+                        for k, v in d.items():
+                            setattr(self, k, v)
+                config = Config(config_dict)
+            except Exception as e:
+                return ("", "", "", "[]", "str", "", "", False, "tool_context", "", "", False, "{}", f"❌ {str(e)}")
             tree = ast.parse(config.function_code)
             function_name, parameters, return_type, function_body = "", [], "str", "pass"
             enable_context, context_param = False, "tool_context"
@@ -321,7 +347,10 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
         """Delete a tool from disk."""
         if not tool_name:
             return "❌ No tool selected", gr.Dropdown()
-        result = self.tool_manager.delete_tool(tool_name, delete_file=True)
+        try:
+            result = self.api_client.delete_tool(tool_name, delete_file=True)
+        except Exception as e:
+            return f"❌ Error: {str(e)}", gr.Dropdown()
         if result["success"]:
             return f"✅ '{tool_name}' deleted", self.refresh_tool_list()
         return f"❌ {result['error']}", gr.Dropdown()
@@ -333,7 +362,11 @@ def {function_name}({", ".join(param_list)}) -> {return_type}:
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown("## 📚 Tool Library")
-                tool_list_tc = gr.Dropdown(choices=self.tool_manager.list_saved_tools(), label="Saved Tools")
+                try:
+                    initial_tools = self.api_client.list_saved_tools()
+                except:
+                    initial_tools = []
+                tool_list_tc = gr.Dropdown(choices=initial_tools, label="Saved Tools")
                 with gr.Row():
                     refresh_tc_btn = gr.Button("🔄", size="sm")
                     load_tc_btn = gr.Button("📂 Load", size="sm", variant="primary")

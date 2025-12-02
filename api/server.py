@@ -15,7 +15,7 @@ import os
 import json
 import sys
 
-# Add shared module to path
+# Add shared module and strands_agents to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "strands_agents"))
 

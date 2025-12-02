@@ -22,6 +22,23 @@ class AgentToolClient:
         """
         self.base_url = base_url.rstrip("/")
     
+    def _request(self, method: str, endpoint: str, **kwargs) -> Any:
+        """
+        Make a generic HTTP request to the API.
+        
+        Args:
+            method: HTTP method (GET, POST, DELETE, etc.)
+            endpoint: API endpoint path
+            **kwargs: Additional arguments passed to requests
+            
+        Returns:
+            Parsed JSON response
+        """
+        url = f"{self.base_url}{endpoint}"
+        response = requests.request(method, url, **kwargs)
+        response.raise_for_status()
+        return response.json()
+    
     # ============ Tool Management Methods ============
     
     def create_tool(

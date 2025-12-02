@@ -6,11 +6,13 @@ This module provides the UI components and functionality for creating and managi
 
 import gradio as gr
 import json
+import sys
 from pathlib import Path
 from typing import List, Tuple
 
-from shared.model_manager import ModelManager
-from strands_agents.agent_manager import AgentManager
+# Add parent directory to path for API client import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from api.client_agents_tools_example import AgentToolClient
 
 
 PROMPT_TEMPLATES = {
@@ -33,25 +35,36 @@ You are a helpful AI assistant.<|eot_id|><|start_header_id|>user<|end_header_id|
 class AgentCreatorTab:
     """Manages the Agent Creator tab UI and functionality."""
     
-    def __init__(self, model_manager: ModelManager, agent_manager: AgentManager, tool_manager):
-        self.model_manager = model_manager
-        self.agent_manager = agent_manager
-        self.tool_manager = tool_manager
+    def __init__(self, api_client: AgentToolClient):
+        self.api_client = api_client
     
     def get_available_models(self) -> List[str]:
-        """Get list of available models from model manager."""
-        models = self.model_manager.list_models()
-        return models if models else ["No models found"]
+        """Get list of available models from API."""
+        try:
+            response = self.api_client._request("GET", "/models")
+            models = response if response else []
+            return models if models else ["No models found"]
+        except Exception as e:
+            print(f"Error fetching models: {e}")
+            return ["No models found"]
     
     def get_available_tools(self) -> List[str]:
-        """Get list of available tools from tool manager."""
-        tools = self.tool_manager.list_saved_tools()
-        return tools if tools else []
+        """Get list of available tools from API."""
+        try:
+            tools = self.api_client.list_saved_tools()
+            return tools if tools else []
+        except Exception as e:
+            print(f"Error fetching tools: {e}")
+            return []
     
     def get_saved_agents(self) -> List[str]:
-        """Get list of saved agents."""
-        agents = self.agent_manager.list_saved_agents()
-        return agents if agents else ["No agents saved"]
+        """Get list of saved agents from API."""
+        try:
+            agents = self.api_client.list_saved_agents()
+            return agents if agents else ["No agents saved"]
+        except Exception as e:
+            print(f"Error fetching agents: {e}")
+            return ["No agents saved"]
     
     def apply_prompt_template(self, template_name: str) -> str:
         """Apply a prompt template. Returns the prompt template text."""
@@ -82,7 +95,11 @@ class AgentCreatorTab:
         if not agent_name or agent_name == "No agents saved":
             return default_values
         
-        agent_info = self.agent_manager.get_agent_info(agent_name)
+        try:
+            agent_info = self.api_client.get_agent_info(agent_name)
+        except Exception as e:
+            print(f"Error loading agent: {e}")
+            return default_values
         
         if not agent_info.get("exists"):
             return default_values
@@ -133,19 +150,22 @@ class AgentCreatorTab:
         if not model_name or model_name == "No models found":
             return "❌ Error: Please select a model", gr.update()
         
-        # Create agent
-        result = self.agent_manager.create_agent(
-            name=name,
-            description=description,
-            system_prompt=system_prompt,
-            model_name=model_name,
-            tools=tools or None,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            top_k=top_k,
-            repetition_penalty=repetition_penalty,
-        )
+        # Create agent via API
+        try:
+            result = self.api_client.create_agent(
+                name=name,
+                description=description,
+                system_prompt=system_prompt,
+                model_name=model_name,
+                tools=tools or None,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+            )
+        except Exception as e:
+            return f"❌ Error: {str(e)}", gr.update()
         
         if result.get("success"):
             # Update agent list
@@ -159,7 +179,10 @@ class AgentCreatorTab:
         if not agent_name or agent_name == "No agents saved":
             return "❌ Error: Please select an agent to delete", gr.update()
         
-        result = self.agent_manager.delete_agent(agent_name, delete_file=True)
+        try:
+            result = self.api_client.delete_agent(agent_name, delete_file=True)
+        except Exception as e:
+            return f"❌ Error: {str(e)}", gr.update()
         
         if result.get("success"):
             agent_list = self.get_saved_agents()
@@ -172,7 +195,10 @@ class AgentCreatorTab:
         if not agent_name or agent_name == "No agents saved":
             return json.dumps({"error": "No agent selected"}, indent=2)
         
-        agent_info = self.agent_manager.get_agent_info(agent_name)
+        try:
+            agent_info = self.api_client.get_agent_info(agent_name)
+        except Exception as e:
+            return json.dumps({"error": f"API error: {str(e)}"}, indent=2)
         
         if not agent_info.get("exists"):
             return json.dumps({"error": "Agent not found"}, indent=2)
@@ -195,9 +221,17 @@ class AgentCreatorTab:
     
     def get_model_status(self) -> str:
         """Get current model loading status."""
-        if self.model_manager.is_model_loaded():
-            current_model = self.model_manager.get_current_model_name()
-            gpu_stats = self.model_manager.get_gpu_stats()
+        try:
+            status_response = self.api_client._request("GET", "/status")
+            model_loaded = status_response.get("model_loaded", False)
+            
+            if model_loaded:
+                current_model = status_response.get("current_model")
+                gpu_stats = status_response.get("gpu_stats", {})
+        except Exception as e:
+            return f"❌ Error fetching model status: {str(e)}"
+        
+        if model_loaded:
             
             status = f"✅ **Model Loaded:** `{current_model}`\n\n"
             
@@ -217,7 +251,10 @@ class AgentCreatorTab:
         
         info_parts = []
         for tool_name in tool_names:
-            tool_info = self.tool_manager.get_tool_info(tool_name)
+            try:
+                tool_info = self.api_client.get_tool_info(tool_name)
+            except Exception as e:
+                continue
             if tool_info.get("exists"):
                 info_parts.append(f"### {tool_name}")
                 info_parts.append(f"**Description:** {tool_info.get('description', 'N/A')}")

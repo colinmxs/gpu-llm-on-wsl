@@ -1,7 +1,11 @@
-# Frontend requirements for Gradio interfaces
+# Frontend requirements for Gradio UI
+# This frontend uses the API client instead of direct dependencies
 
 # Core UI framework
 gradio==6.0.1
 
-# Required for frontend functionality
-# (torch, transformers, etc. are inherited from base image)
+# HTTP client for API requests
+requests>=2.31.0
+
+# Note: No PyTorch, transformers, or strands-agents dependencies needed!
+# The frontend communicates with the backend API server which handles all model operations.

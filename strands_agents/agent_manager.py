@@ -23,7 +23,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 from model_manager import ModelManager
 
 # Import Strands model adapter from local module
-from .huggingface_local_model import HuggingFaceLocalModel
+try:
+    from .huggingface_local_model import HuggingFaceLocalModel
+except ImportError:
+    # Fallback for when imported as top-level module
+    from huggingface_local_model import HuggingFaceLocalModel
 
 
 class AgentManager:

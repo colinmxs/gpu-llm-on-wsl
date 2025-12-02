@@ -12,9 +12,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.model_manager import ModelManager
-from strands_agents.agent_manager import AgentManager
-from strands_agents.tool_manager import ToolManager
+from api.client_agents_tools_example import AgentToolClient
 
 # Import tab modules
 from frontend.agent_creator_tab import AgentCreatorTab
@@ -23,91 +21,69 @@ from frontend.agent_playground_tab import AgentPlaygroundTab
 
 
 # Initialize managers
-# When running in Docker, these paths map to mounted volumes from docker-compose.yml:
-# - ./agents:/app/agents (host ./agents directory mounted to /app/agents in container)
-# - ./tools:/app/tools (host ./tools directory mounted to /app/tools in container)
-MODELS_DIR = Path("/app/models")
-AGENTS_DIR = Path("/app/agents")
-TOOLS_DIR = Path("/app/tools")
+# API client will communicate with the backend API server
+API_BASE_URL = "http://localhost:8000"
 
-# Global manager instances (will be set based on API mode toggle)
-model_manager = None
-agent_manager = None
-tool_manager = None
+# Global API client instance
+api_client = None
 
-def initialize_managers(use_api_mode: bool = False, api_url: str = "http://localhost:8000"):
-    """Initialize or reinitialize managers with the specified mode."""
-    global model_manager, agent_manager, tool_manager
-    
-    model_manager = ModelManager(models_dir=MODELS_DIR, use_api=use_api_mode, api_base_url=api_url)
-    agent_manager = AgentManager(agents_dir=AGENTS_DIR, model_manager=model_manager, tools_dir=TOOLS_DIR)
-    tool_manager = ToolManager(tools_dir=TOOLS_DIR)
-    
-    return model_manager, agent_manager, tool_manager
+def initialize_api_client(api_url: str = API_BASE_URL):
+    """Initialize or reinitialize API client with the specified URL."""
+    global api_client
+    api_client = AgentToolClient(base_url=api_url)
+    return api_client
 
-# Initialize with default (native mode)
-initialize_managers(use_api_mode=False)
+# Initialize with default
+initialize_api_client()
 
 
 def create_agent_creator_ui():
     """Create the complete Agent Creator + Tool Creator + Agent Playground UI with tabs."""
     
-    # Initialize tab instances
-    agent_tab = AgentCreatorTab(model_manager, agent_manager, tool_manager)
-    tool_tab = ToolCreatorTab(tool_manager)
-    playground_tab = AgentPlaygroundTab(model_manager, agent_manager, tool_manager)
+    # Initialize tab instances with API client
+    agent_tab = AgentCreatorTab(api_client)
+    tool_tab = ToolCreatorTab(api_client)
+    playground_tab = AgentPlaygroundTab(api_client)
     
     with gr.Blocks(title="Strands SDK - Agent & Tool Creator") as interface:
         gr.Markdown("# 🚀 Strands SDK - Agent & Tool Creator")
         gr.Markdown("Comprehensive interface for creating AI agents and tools")
         
-        # API Mode Toggle
+        # API URL Configuration
         with gr.Accordion("⚙️ Settings", open=False):
-            gr.Markdown("### Model Manager Mode")
+            gr.Markdown("### API Configuration")
             with gr.Row():
-                api_mode_toggle = gr.Checkbox(
-                    label="Use API Mode",
-                    value=False,
-                    info="Enable to use FastAPI backend for model operations instead of direct loading"
-                )
                 api_url_input = gr.Textbox(
                     label="API URL",
-                    value="http://localhost:8000",
+                    value=API_BASE_URL,
                     placeholder="http://localhost:8000",
-                    visible=False
+                    info="URL of the backend API server"
                 )
-            api_status = gr.Markdown("**Mode:** Native (Direct Model Loading)")
+                update_api_btn = gr.Button("🔄 Update API URL", size="sm")
+            api_status = gr.Markdown(f"**API URL:** `{API_BASE_URL}`")
             
-            def toggle_api_mode(use_api: bool, api_url: str):
-                """Switch between native and API mode."""
-                initialize_managers(use_api_mode=use_api, api_url=api_url)
+            def update_api_url(api_url: str):
+                """Update the API client URL."""
+                initialize_api_client(api_url)
                 
-                # Update tab instances
-                agent_tab.model_manager = model_manager
-                agent_tab.agent_manager = agent_manager
-                tool_tab.tool_manager = tool_manager
-                playground_tab.model_manager = model_manager
-                playground_tab.agent_manager = agent_manager
-                playground_tab.tool_manager = tool_manager
+                # Update tab instances with new API client
+                agent_tab.api_client = api_client
+                tool_tab.api_client = api_client
+                playground_tab.api_client = api_client
                 
-                mode_text = "API Mode" if use_api else "Native (Direct Model Loading)"
-                url_visible = use_api
-                status = f"**Mode:** {mode_text}"
-                if use_api:
-                    status += f"\n**API URL:** `{api_url}`"
-                
-                return status, gr.update(visible=url_visible)
+                status = f"**API URL:** `{api_url}`"
+                return status
             
-            api_mode_toggle.change(
-                fn=toggle_api_mode,
-                inputs=[api_mode_toggle, api_url_input],
-                outputs=[api_status, api_url_input]
+            update_api_btn.click(
+                fn=update_api_url,
+                inputs=[api_url_input],
+                outputs=[api_status]
             )
             
-            api_url_input.change(
-                fn=toggle_api_mode,
-                inputs=[api_mode_toggle, api_url_input],
-                outputs=[api_status, api_url_input]
+            api_url_input.submit(
+                fn=update_api_url,
+                inputs=[api_url_input],
+                outputs=[api_status]
             )
         
         with gr.Tabs():

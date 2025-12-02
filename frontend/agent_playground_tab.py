@@ -18,15 +18,17 @@ from strands_agents.tool_manager import ToolManager
 class AgentPlaygroundTab:
     """Manages the Agent Playground tab UI and functionality."""
     
-    def __init__(self, model_manager: ModelManager, agent_manager: AgentManager, tool_manager: ToolManager):
-        self.model_manager = model_manager
-        self.agent_manager = agent_manager
-        self.tool_manager = tool_manager
+    def __init__(self, api_client: AgentToolClient):
+        self.api_client = api_client
     
     def get_saved_agents(self) -> List[str]:
-        """Get list of saved agents."""
-        agents = self.agent_manager.list_saved_agents()
-        return agents if agents else ["No agents saved"]
+        """Get list of saved agents from API."""
+        try:
+            agents = self.api_client.list_saved_agents()
+            return agents if agents else ["No agents saved"]
+        except Exception as e:
+            print(f"Error fetching agents: {e}")
+            return ["No agents saved"]
     
     def load_agent_for_chat(self, agent_name: str) -> Tuple[str, str, str]:
         """
@@ -67,7 +69,11 @@ class AgentPlaygroundTab:
         
         # Model status
         model_loaded = agent_info.get('model_loaded', False)
-        current_model = self.model_manager.get_current_model_name()
+        try:
+            status_response = self.api_client._request("GET", "/status")
+            current_model = status_response.get("current_model")
+        except:
+            current_model = None
         required_model = agent_info.get('model_name')
         
         if model_loaded:
@@ -95,7 +101,10 @@ class AgentPlaygroundTab:
         if not agent_name or agent_name == "No agents saved":
             return "No agent selected", "", "⚠️ Please select an agent first"
         
-        agent_info = self.agent_manager.get_agent_info(agent_name)
+        try:
+            agent_info = self.api_client.get_agent_info(agent_name)
+        except Exception as e:
+            return f"❌ Error: {str(e)}", "", "❌ API error"
         
         if not agent_info.get("exists"):
             return "❌ Agent not found", "", "❌ Agent not found"
@@ -105,15 +114,26 @@ class AgentPlaygroundTab:
             return "❌ Agent has no model configured", "", "❌ No model configured"
         
         # Check if correct model is already loaded
-        current_model = self.model_manager.get_current_model_name()
+        try:
+            status_response = self.api_client._request("GET", "/status")
+            current_model = status_response.get("current_model")
+        except:
+            current_model = None
+            
         if current_model == required_model:
             return self.load_agent_for_chat(agent_name)
         
         # Load the required model (default to 4-bit quantization)
         status_msg = f"🔄 Loading model `{required_model}`... This may take a minute..."
         
-        # Attempt to load the model
-        result = self.model_manager.load_model(required_model, quantization="4-bit (NF4)")
+        # Attempt to load the model via API
+        try:
+            result = self.api_client._request("POST", "/model/load", json={
+                "model_name": required_model,
+                "quantization": "4-bit (NF4)"
+            })
+        except Exception as e:
+            return self.load_agent_for_chat(agent_name)[0], self.load_agent_for_chat(agent_name)[1], f"❌ Failed to load model: {str(e)}"
         
         if result.get("success"):
             # Reload agent info with updated model status
@@ -124,9 +144,17 @@ class AgentPlaygroundTab:
     
     def get_model_status(self) -> str:
         """Get current model loading status."""
-        if self.model_manager.is_model_loaded():
-            current_model = self.model_manager.get_current_model_name()
-            gpu_stats = self.model_manager.get_gpu_stats()
+        try:
+            status_response = self.api_client._request("GET", "/status")
+            model_loaded = status_response.get("model_loaded", False)
+            
+            if model_loaded:
+                current_model = status_response.get("current_model")
+                gpu_stats = status_response.get("gpu_stats", {})
+        except Exception as e:
+            return f"❌ Error fetching model status: {str(e)}"
+        
+        if model_loaded:
             
             status = f"✅ **Model Loaded:** `{current_model}`\n\n"
             
@@ -156,16 +184,16 @@ class AgentPlaygroundTab:
         ]
         return "\n".join(lines)
     
-    async def chat_with_agent(
+    def chat_with_agent(
         self,
         message: str,
         history: List[Dict[str, str]],
         agent_name: str
     ):
         """
-        Stream chat with the selected Strands agent.
+        Stream chat with the selected agent via API.
         
-        This uses the AgentManager's native Strands streaming implementation.
+        This uses the API client's streaming implementation.
         
         Args:
             message: User message
@@ -203,8 +231,8 @@ class AgentPlaygroundTab:
                 if i+1 < len(history):
                     tuple_history.append((history[i]["content"], history[i+1]["content"]))
             
-            # Stream from agent - using actual Strands SDK event format
-            async for event in self.agent_manager.chat_with_agent_async(agent_name, message, tuple_history):
+            # Stream from agent via API - using SSE streaming
+            for event in self.api_client.chat_with_agent_stream(agent_name, message, [list(t) for t in tuple_history]):
                 # Error handling
                 if "error" in event:
                     error_msg = event.get("error", "Unknown error")
