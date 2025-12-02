@@ -478,6 +478,7 @@ class AgentManager:
         
         # Use Strands Agent streaming
         try:
+            agent
             async for event in agent.stream_async(messages):
                 yield event
         except Exception as e:

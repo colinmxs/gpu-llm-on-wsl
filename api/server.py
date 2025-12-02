@@ -14,6 +14,10 @@ from pathlib import Path
 import os
 import json
 import sys
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Add shared module and strands_agents to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
@@ -489,6 +493,8 @@ async def chat_with_agent(agent_name: str, request: AgentChatRequest):
         message=request.message,
         history=history
     ):
+        logger.info(f"Chat event received: {json.dumps(event, indent=2, default=str)}")
+        
         if event.get("type") == "error":
             raise HTTPException(status_code=500, detail=event.get("error", "Chat failed"))
         elif event.get("type") == "text":

@@ -10,9 +10,6 @@ import re
 import json
 from typing import Tuple, List
 
-from strands_agents.tool_manager import ToolManager, ToolConfig
-
-
 # Tool Creator type annotations
 TYPE_ANNOTATIONS = [
     "str", "int", "float", "bool", "list", "dict", "Any",

@@ -104,13 +104,11 @@ def create_agent_creator_ui():
             fn=lambda: [
                 gr.update(choices=agent_tab.get_saved_agents()),
                 gr.update(choices=agent_tab.get_available_tools()),
-                gr.update(choices=tool_tab.tool_manager.list_saved_tools()),
                 gr.update(choices=playground_tab.get_saved_agents())
             ],
             outputs=[
                 agent_components['agent_list'],
                 agent_components['tools_dropdown'],
-                tool_components['tool_list'],
                 playground_components['agent_list']
             ]
         )

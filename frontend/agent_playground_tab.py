@@ -10,11 +10,6 @@ import json
 from typing import List, Tuple, Optional, Dict, Any
 from pathlib import Path
 
-from shared.model_manager import ModelManager
-from strands_agents.agent_manager import AgentManager
-from strands_agents.tool_manager import ToolManager
-
-
 class AgentPlaygroundTab:
     """Manages the Agent Playground tab UI and functionality."""
     
@@ -40,7 +35,7 @@ class AgentPlaygroundTab:
         if not agent_name or agent_name == "No agents saved":
             return "No agent selected", "", "⚠️ Please select an agent"
         
-        agent_info = self.agent_manager.get_agent_info(agent_name)
+        agent_info = self.api_client.get_agent_info(agent_name)
         
         if not agent_info.get("exists"):
             return f"❌ Agent '{agent_name}' not found", "", f"❌ Agent not found"
