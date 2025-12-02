@@ -1,0 +1,10 @@
+# Requirements for Strands Agents SDK Integration
+
+# Core Strands Agents SDK
+strands-agents>=1.0.0
+
+# Optional Strands packages (uncomment as needed)
+# strands-agents-tools>=0.2.0  # Community tools package
+# strands-agents-builder  # Agent builder package
+
+# Note: Core dependencies (torch, transformers, pydantic) are inherited from base image

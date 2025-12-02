@@ -7,3 +7,6 @@ uvicorn[standard]==0.34.0
 # Additional dependencies
 pydantic==2.10.5
 python-multipart==0.0.20
+
+# Requests for client example
+requests>=2.31.0

@@ -1,0 +1,7 @@
+# Frontend requirements for Gradio interfaces
+
+# Core UI framework
+gradio==6.0.1
+
+# Required for frontend functionality
+# (torch, transformers, etc. are inherited from base image)

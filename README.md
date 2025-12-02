@@ -58,8 +58,7 @@ A Dockerized environment for running quantized large language models (LLMs) with
         Open `http://localhost:7861` in your browser. Use the tabs to switch between:
         - **🤖 Agent Creator**: Configure agents with models, tools, and conversation management
         - **🛠️ Tool Creator**: Create production-ready tools with visual code generation
-        
-        See [frontend/AGENT_CREATOR_README.md](frontend/AGENT_CREATOR_README.md) for agent documentation.
+        - **🎮 Agent Playground**: Chat with your agents in real-time with streaming inference        
     
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash

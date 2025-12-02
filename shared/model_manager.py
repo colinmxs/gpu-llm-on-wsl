@@ -3,11 +3,15 @@ Model Manager - Backend logic for LLM loading, unloading, and inference.
 
 This module provides a clean, Gradio-agnostic interface for managing language models,
 completely separating model lifecycle management from UI concerns.
+
+Supports both native (local) and API-based model access.
 """
 
 import gc
 import time
 import threading
+import requests
+import json
 from pathlib import Path
 from typing import Optional, Dict, Any, Generator, List
 from dataclasses import dataclass
@@ -33,26 +37,51 @@ class ModelManager:
     
     This class is completely independent of any UI framework and returns data dictionaries
     that can be formatted by any frontend (Gradio, CLI, FastAPI, etc.).
+    
+    Supports two modes:
+    - Native mode (use_api=False): Direct model loading and inference
+    - API mode (use_api=True): Uses FastAPI backend for all operations
     """
     
-    def __init__(self, models_dir: Path, cache_dir: Optional[Path] = None):
+    def __init__(self, models_dir: Path, cache_dir: Optional[Path] = None, 
+                 use_api: bool = False, api_base_url: str = "http://localhost:8000"):
         """
         Initialize the ModelManager.
         
         Args:
             models_dir: Directory where models are stored
             cache_dir: Optional cache directory for Hugging Face
+            use_api: If True, use API mode; if False, use native mode
+            api_base_url: Base URL for the API (only used if use_api=True)
         """
         self.models_dir = Path(models_dir)
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.use_api = use_api
+        self.api_base_url = api_base_url.rstrip('/')
         self.state: Optional[ModelState] = None
     
     def is_model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
+        if self.use_api:
+            try:
+                response = requests.get(f"{self.api_base_url}/status")
+                response.raise_for_status()
+                data = response.json()
+                return data.get("model_loaded", False)
+            except Exception:
+                return False
         return self.state is not None
     
     def get_current_model_name(self) -> Optional[str]:
         """Get the name of the currently loaded model, or None."""
+        if self.use_api:
+            try:
+                response = requests.get(f"{self.api_base_url}/model/current")
+                response.raise_for_status()
+                data = response.json()
+                return data.get("model_name")
+            except Exception:
+                return None
         return self.state.name if self.state else None
     
     def list_models(self) -> List[str]:
@@ -62,6 +91,14 @@ class ModelManager:
         Returns:
             List of model names in "org/model" format
         """
+        if self.use_api:
+            try:
+                response = requests.get(f"{self.api_base_url}/models")
+                response.raise_for_status()
+                return response.json()
+            except Exception:
+                return []
+        
         if not self.models_dir.exists():
             return []
         
@@ -98,18 +135,16 @@ class ModelManager:
             model_name: Name of the model to inspect
             
         Returns:
-            Dictionary containing model information:
-                - exists: bool
-                - name: str
-                - path: str
-                - file_count: int
-                - total_size_bytes: int
-                - has_config: bool
-                - has_tokenizer: bool
-                - safetensors_count: int
-                - bin_count: int
-                - error: Optional[str]
+            Dictionary containing model information
         """
+        if self.use_api:
+            try:
+                response = requests.get(f"{self.api_base_url}/models/{model_name}")
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                return {"exists": False, "error": str(e)}
+        
         if not model_name:
             return {"exists": False, "error": "No model name provided"}
         
@@ -161,16 +196,16 @@ class ModelManager:
         Get current GPU memory statistics.
         
         Returns:
-            Dictionary containing:
-                - available: bool
-                - name: Optional[str]
-                - total_gb: Optional[float]
-                - allocated_gb: Optional[float]
-                - reserved_gb: Optional[float]
-                - free_gb: Optional[float]
-                - usage_percent: Optional[float]
-                - error: Optional[str]
+            Dictionary containing GPU stats
         """
+        if self.use_api:
+            try:
+                response = requests.get(f"{self.api_base_url}/gpu")
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                return {"available": False, "error": str(e)}
+        
         if not torch.cuda.is_available():
             return {"available": False, "error": "CUDA not available"}
         
@@ -202,11 +237,16 @@ class ModelManager:
         Unload the current model and free GPU memory.
         
         Returns:
-            Dictionary containing:
-                - success: bool
-                - message: str
-                - previous_model: Optional[str]
+            Dictionary containing operation status
         """
+        if self.use_api:
+            try:
+                response = requests.post(f"{self.api_base_url}/model/unload")
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                return {"success": False, "message": str(e)}
+        
         if not self.state:
             return {
                 "success": False,
@@ -238,15 +278,19 @@ class ModelManager:
             quantization: One of "4-bit (NF4)", "8-bit", or "Full Precision (FP16)"
             
         Returns:
-            Dictionary containing:
-                - success: bool
-                - message: str
-                - model_name: Optional[str]
-                - quantization: Optional[str]
-                - device_map: Optional[dict]
-                - previous_model: Optional[str]
-                - error: Optional[str]
+            Dictionary containing operation status
         """
+        if self.use_api:
+            try:
+                response = requests.post(
+                    f"{self.api_base_url}/model/load",
+                    json={"model_name": model_name, "quantization": quantization}
+                )
+                response.raise_for_status()
+                return response.json()
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        
         if not model_name:
             return {"success": False, "error": "No model name provided"}
         
@@ -351,14 +395,43 @@ class ModelManager:
             skip_prompt: Whether to skip the prompt in the output
             
         Yields:
-            Dictionary containing:
-                - type: "token" | "complete" | "error"
-                - text: str (the generated token or full text)
-                - total_tokens: Optional[int] (only in "complete" type)
-                - tokens_per_second: Optional[float] (only in "complete" type)
-                - elapsed_seconds: Optional[float] (only in "complete" type)
-                - error: Optional[str] (only in "error" type)
+            Dictionary containing generation events
         """
+        if self.use_api:
+            # Use API streaming endpoint
+            try:
+                response = requests.post(
+                    f"{self.api_base_url}/generate/stream",
+                    json={
+                        "prompt": prompt,
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                        "top_p": top_p,
+                        "top_k": top_k,
+                        "repetition_penalty": repetition_penalty,
+                        "skip_prompt": skip_prompt
+                    },
+                    stream=True
+                )
+                response.raise_for_status()
+                
+                # Parse SSE stream
+                for line in response.iter_lines():
+                    if line:
+                        line_str = line.decode('utf-8')
+                        if line_str.startswith('data: '):
+                            data_str = line_str[6:]  # Remove 'data: ' prefix
+                            if data_str.strip():
+                                try:
+                                    event = json.loads(data_str)
+                                    yield event
+                                except json.JSONDecodeError:
+                                    continue
+            except Exception as e:
+                yield {"type": "error", "error": str(e)}
+            return
+        
+        # Native implementation
         if not self.state:
             yield {"type": "error", "error": "No model loaded"}
             return
