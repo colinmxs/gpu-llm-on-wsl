@@ -1,0 +1,9 @@
+# API Server Requirements
+
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+
+# Already installed in base image:
+# - pydantic (for request/response models)
+# - torch, transformers (for inference)

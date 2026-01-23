@@ -67,11 +67,16 @@ COPY frontend/requirements.txt /tmp/frontend-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/frontend-requirements.txt
 COPY frontend /app/frontend
 
+# Install API dependencies
+COPY api/requirements.txt /tmp/api-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/api-requirements.txt
+COPY api /app/api
+
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
 
-# Expose common ports (Jupyter: 8888, Gradio: 7860)
-EXPOSE 8888 7860
+# Expose common ports (Jupyter: 8888, Gradio: 7860, API: 8000)
+EXPOSE 8888 7860 8000
 
 # Set the default command
 CMD ["/bin/bash"]

@@ -1,6 +1,6 @@
 # GPU LLM on WSL
 
-A simple Dockerized environment for downloading and testing quantized large language models (LLMs) with GPU acceleration on Windows via WSL2.
+A simple Dockerized environment for downloading, testing, and serving quantized large language models (LLMs) with GPU acceleration on Windows via WSL2.
 
 ---
 
@@ -8,6 +8,7 @@ A simple Dockerized environment for downloading and testing quantized large lang
 
 - **Model Downloads**: Jupyter notebook interface for downloading quantized models from Hugging Face
 - **Inference Testing**: Simple Gradio web UI for testing model inference with GPU acceleration
+- **OpenAI-Compatible API**: Serve models via API for integration with agent frameworks (Strands, LangChain, etc.)
 - **CUDA 12.6 Support**: Pre-configured with PyTorch and CUDA for optimal performance
 - **Quantization**: Built-in support for bitsandbytes 4-bit and 8-bit quantization
 
@@ -52,6 +53,12 @@ A simple Dockerized environment for downloading and testing quantized large lang
         docker run --gpus all -p 7860:7860 -v C:\path\to\models:/app/models -it llm-docker python /app/frontend/gradio_frontend.py
         ```
         Open `http://localhost:7860` in your browser.
+
+    -   **API Server (for Agents)**: Run the OpenAI-compatible API for agent integration.
+        ```bash
+        docker run --gpus all -p 8000:8000 -v C:\path\to\models:/app/models -it llm-docker python /app/api/server.py
+        ```
+        Open `http://localhost:8000/docs` for interactive API documentation.
     
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
@@ -59,3 +66,12 @@ A simple Dockerized environment for downloading and testing quantized large lang
         ```
 
 ---
+
+## Agent Integration
+
+The API server adds OpenAI-compatible `v1/chat/completions` and `v1/models` endpoints to your local models, supporting tool calling and streaming.
+
+**Point your agent framework (OpenAI SDK, LangChain, Strands, etc.) to:**
+- **Base URL**: `http://localhost:8000/v1`
+- **Reference**: See `http://localhost:8000/docs` for full API details
+

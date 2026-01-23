@@ -256,7 +256,7 @@ class ModelManager:
                     quantization_config=bnb_config,
                     device_map="auto",
                     local_files_only=True,
-                    torch_dtype=torch.float16
+                    dtype=torch.float16
                 )
             elif quantization == "8-bit":
                 bnb_config = BitsAndBytesConfig(load_in_8bit=True)
@@ -271,7 +271,7 @@ class ModelManager:
                     str(model_path),
                     device_map="auto",
                     local_files_only=True,
-                    torch_dtype=torch.float16
+                    dtype=torch.float16
                 )
 
             # Store state
