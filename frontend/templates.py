@@ -29,7 +29,7 @@ You are a helpful AI assistant.<|im_end|>
 {prompt}<|im_end|>
 <|im_start|>assistant
 """,
-    "Vicuna": """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+    "Vicuna": """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. 
 
 USER: {prompt}
 ASSISTANT:""",

@@ -1,7 +1,7 @@
 """
 Model Manager - Backend logic for LLM loading, unloading, and inference.
 
-This module provides a clean interface for managing language models in the API server,
+This module provides a clean interface for managing language models,
 completely separating model lifecycle management from UI concerns.
 """
 
@@ -30,15 +30,15 @@ class ModelState:
 class ModelManager:
     """
     Manages the lifecycle of language models including loading, unloading, and generation.
-    
+
     This class is completely independent of any UI framework and returns data dictionaries
-    that can be formatted by any frontend (Gradio, CLI, FastAPI, etc.).
+    that can be formatted by any frontend (Gradio, CLI, etc.).
     """
-    
+
     def __init__(self, models_dir: Path, cache_dir: Optional[Path] = None):
         """
         Initialize the ModelManager.
-        
+
         Args:
             models_dir: Directory where models are stored
             cache_dir: Optional cache directory for Hugging Face
@@ -46,65 +46,65 @@ class ModelManager:
         self.models_dir = Path(models_dir)
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self.state: Optional[ModelState] = None
-    
+
     def is_model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
         return self.state is not None
-    
+
     def get_current_model_name(self) -> Optional[str]:
         """Get the name of the currently loaded model, or None."""
         return self.state.name if self.state else None
-    
+
     def list_models(self) -> List[str]:
         """
         Get a list of available models.
-        
+
         Returns:
             List of model names in "org/model" format
         """
         if not self.models_dir.exists():
             return []
-        
+
         model_dirs = [d for d in self.models_dir.iterdir() if d.is_dir()]
         return sorted([d.name.replace("--", "/", 1) for d in model_dirs])
-    
+
     def get_model_path(self, model_name: str) -> Path:
         """
         Convert model name to filesystem path.
-        
+
         Args:
             model_name: Model name in "org/model" format
-            
+
         Returns:
             Path to the model directory
         """
         safe_name = model_name.replace("/", "--")
         model_path = self.models_dir / safe_name
-        
+
         # Handle Hugging Face cache structure
         if (model_path / "snapshots").exists():
             snapshots = list((model_path / "snapshots").iterdir())
             if snapshots:
                 # Return the first snapshot found
                 return snapshots[0]
-                
+
         return model_path
-    
+
     def get_model_info(self, model_name: str) -> Dict[str, Any]:
         """
         Get information about a model.
-        
+
         Args:
             model_name: Name of the model to inspect
-            
+
         Returns:
             Dictionary containing model information
         """
         if not model_name:
             return {"exists": False, "error": "No model name provided"}
-        
+
         model_path = self.get_model_path(model_name)
-        
+
         if not model_path.exists():
             return {
                 "exists": False,
@@ -112,20 +112,20 @@ class ModelManager:
                 "path": str(model_path),
                 "error": "Model path not found"
             }
-        
+
         try:
             # Count files and calculate size
             file_count = sum(1 for _ in model_path.rglob("*") if _.is_file())
             total_size = sum(f.stat().st_size for f in model_path.rglob("*") if f.is_file())
-            
+
             # Check for specific files
             has_config = (model_path / "config.json").exists()
             has_tokenizer = (model_path / "tokenizer_config.json").exists()
-            
+
             # Count model files
             safetensors_count = len(list(model_path.glob("*.safetensors")))
             bin_count = len(list(model_path.glob("*.bin")))
-            
+
             return {
                 "exists": True,
                 "name": model_name,
@@ -145,17 +145,17 @@ class ModelManager:
                 "path": str(model_path),
                 "error": f"Error reading model info: {str(e)}"
             }
-    
+
     def get_gpu_stats(self) -> Dict[str, Any]:
         """
         Get current GPU memory statistics.
-        
+
         Returns:
             Dictionary containing GPU stats
         """
         if not torch.cuda.is_available():
             return {"available": False, "error": "CUDA not available"}
-        
+
         try:
             props = torch.cuda.get_device_properties(0)
             total_gb = props.total_memory / 1024**3
@@ -163,7 +163,7 @@ class ModelManager:
             reserved_gb = torch.cuda.memory_reserved(0) / 1024**3
             free_gb = total_gb - reserved_gb
             usage_percent = (reserved_gb / total_gb) * 100
-            
+
             return {
                 "available": True,
                 "name": torch.cuda.get_device_name(0),
@@ -178,11 +178,11 @@ class ModelManager:
                 "available": True,
                 "error": f"Error reading GPU stats: {str(e)}"
             }
-    
+
     def unload_model(self) -> Dict[str, Any]:
         """
         Unload the current model and free GPU memory.
-        
+
         Returns:
             Dictionary containing operation status
         """
@@ -191,58 +191,58 @@ class ModelManager:
                 "success": False,
                 "message": "No model currently loaded"
             }
-        
+
         previous_model = self.state.name
-        
+
         # Clean up
         del self.state.model
         del self.state.tokenizer
         self.state = None
-        
+
         gc.collect()
         torch.cuda.empty_cache()
-        
+
         return {
             "success": True,
             "message": "Model unloaded successfully",
             "previous_model": previous_model
         }
-    
+
     def load_model(self, model_name: str, quantization: str = "4-bit (NF4)") -> Dict[str, Any]:
         """
         Load a model with specified quantization.
-        
+
         Args:
             model_name: Name of the model to load
             quantization: One of "4-bit (NF4)", "8-bit", or "Full Precision (FP16)"
-            
+
         Returns:
             Dictionary containing operation status
         """
         if not model_name:
             return {"success": False, "error": "No model name provided"}
-        
+
         model_path = self.get_model_path(model_name)
-        
+
         if not model_path.exists():
             return {
                 "success": False,
                 "error": f"Model not found: {model_path}"
             }
-        
+
         # Unload existing model if any
         previous_model = None
         if self.state:
             previous_model = self.state.name
             self.unload_model()
-        
+
         try:
             # Load tokenizer
             tokenizer = AutoTokenizer.from_pretrained(
                 str(model_path),
                 local_files_only=True
             )
-            
+
             # Configure quantization and load model
             if quantization == "4-bit (NF4)":
                 bnb_config = BitsAndBytesConfig(
@@ -273,7 +273,7 @@ class ModelManager:
                     local_files_only=True,
                     torch_dtype=torch.float16
                 )
-            
+
             # Store state
             device_map = model.hf_device_map if hasattr(model, 'hf_device_map') else None
             self.state = ModelState(
@@ -283,7 +283,7 @@ class ModelManager:
                 quantization=quantization,
                 device_map=device_map
             )
-            
+
             return {
                 "success": True,
                 "message": "Model loaded successfully",
@@ -292,14 +292,14 @@ class ModelManager:
                 "device_map": device_map,
                 "previous_model": previous_model
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
                 "error": f"Failed to load model: {str(e)}",
                 "model_name": model_name
             }
-    
+
     def generate(
         self,
         prompt: str,
@@ -312,7 +312,7 @@ class ModelManager:
     ) -> Generator[Dict[str, Any], None, None]:
         """
         Generate text from a prompt with streaming output.
-        
+
         Args:
             prompt: Input prompt text
             max_tokens: Maximum number of tokens to generate
@@ -321,31 +321,31 @@ class ModelManager:
             top_k: Top-k sampling parameter
             repetition_penalty: Penalty for repeating tokens
             skip_prompt: Whether to skip the prompt in the output
-            
+
         Yields:
             Dictionary containing generation events
         """
         if not self.state:
             yield {"type": "error", "error": "No model loaded"}
             return
-        
+
         if not prompt.strip():
             yield {"type": "error", "error": "Empty prompt"}
             return
-        
+
         try:
             # Tokenize input
             inputs = self.state.tokenizer(prompt, return_tensors="pt").to(self.state.model.device)
-            
+
             start_time = time.time()
-            
+
             # Setup streaming
             streamer = TextIteratorStreamer(
                 self.state.tokenizer,
                 skip_prompt=skip_prompt,
                 skip_special_tokens=True
             )
-            
+
             # Generation parameters
             generation_kwargs = dict(
                 **inputs,
@@ -358,18 +358,18 @@ class ModelManager:
                 pad_token_id=self.state.tokenizer.eos_token_id,
                 streamer=streamer
             )
-            
+
             # Start generation in a separate thread
             thread = threading.Thread(
                 target=self.state.model.generate,
                 kwargs=generation_kwargs
             )
             thread.start()
-            
+
             # Stream the output
             generated_text = ""
             num_tokens = 0
-            
+
             for new_text in streamer:
                 generated_text += new_text
                 num_tokens += 1
@@ -378,13 +378,13 @@ class ModelManager:
                     "text": new_text,
                     "cumulative_text": generated_text
                 }
-            
+
             # Wait for thread to complete
             thread.join()
-            
+
             elapsed = time.time() - start_time
             tokens_per_sec = num_tokens / elapsed if elapsed > 0 else 0
-            
+
             # Yield completion event
             yield {
                 "type": "complete",
@@ -393,6 +393,6 @@ class ModelManager:
                 "tokens_per_second": tokens_per_sec,
                 "elapsed_seconds": elapsed
             }
-            
+
         except Exception as e:
             yield {"type": "error", "error": f"Generation failed: {str(e)}"}

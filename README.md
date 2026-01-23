@@ -1,6 +1,16 @@
 # GPU LLM on WSL
 
-A Dockerized environment for running quantized large language models (LLMs) with GPU acceleration on Windows via WSL2. 
+A simple Dockerized environment for downloading and testing quantized large language models (LLMs) with GPU acceleration on Windows via WSL2.
+
+---
+
+## Features
+
+- **Model Downloads**: Jupyter notebook interface for downloading quantized models from Hugging Face
+- **Inference Testing**: Simple Gradio web UI for testing model inference with GPU acceleration
+- **CUDA 12.6 Support**: Pre-configured with PyTorch and CUDA for optimal performance
+- **Quantization**: Built-in support for bitsandbytes 4-bit and 8-bit quantization
+
 ---
 
 ## Prerequisites
@@ -30,8 +40,6 @@ A Dockerized environment for running quantized large language models (LLMs) with
 2.  **Run a Command**
 
     All commands should mount a local directory to `/app/models` to persist models. Replace `C:\path\to\models` with a directory on your machine.
-    
-    **Optional:** Mount a local directory to `/app/agents` to persist agent configurations. Replace `C:\path\to\agents` with a directory on your machine.
 
     -   **Download Models (Jupyter)**: Use a notebook to download models from Hugging Face.
         ```bash
@@ -44,27 +52,10 @@ A Dockerized environment for running quantized large language models (LLMs) with
         docker run --gpus all -p 7860:7860 -v C:\path\to\models:/app/models -it llm-docker python /app/frontend/gradio_frontend.py
         ```
         Open `http://localhost:7860` in your browser.
-
-    -   **FastAPI Server**: Run the inference API for local development.
-        ```bash
-        docker run --gpus all -p 8000:8000 -v C:\path\to\models:/app/models -it llm-docker python -m api.server
-        ```
-        Open `http://localhost:8000/docs` for API documentation. See [API_SETUP.md](API_SETUP.md) for detailed usage.
-
-    -   **Agent & Tool Creator**: Create and manage Strands SDK agents and tools in one unified interface.
-        ```bash
-        docker run --gpus all -p 7861:7861 -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/strands_agents/examples/agents -v C:\path\to\tools:/app/strands_agents/examples/tools -it llm-docker python /app/frontend/agent_creator_gradio.py
-        ```
-        Open `http://localhost:7861` in your browser. Use the tabs to switch between:
-        - **🤖 Agent Creator**: Configure agents with models, tools, and conversation management
-        - **🛠️ Tool Creator**: Create production-ready tools with visual code generation
-        - **🎮 Agent Playground**: Chat with your agents in real-time with streaming inference        
     
     -   **Interactive Shell**: Open a bash shell inside the container for manual control.
         ```bash
-        docker run --gpus all -v C:\path\to\models:/app/models -v C:\path\to\agents:/app/agents -v C:\path\to\tools:/app/tools -it llm-docker
+        docker run --gpus all -v C:\path\to\models:/app/models -it llm-docker
         ```
 
 ---
-
-For advanced validation and sanity checks, see `sanity-test.md`.

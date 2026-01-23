@@ -1,29 +1,23 @@
 version: '3.8'
 
 services:
-  llm-api:
+  llm-gradio:
     build: .
-    container_name: gpu-llm-api
+    container_name: gpu-llm-gradio
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - HF_HOME=/app/cache
-      - API_PORT=8000
-      - API_HOST=0.0.0.0
       - MODELS_DIR=/app/models
       - CACHE_DIR=/app/cache
     ports:
-      - "8000:8000"  # FastAPI
       - "7860:7860"  # Gradio Frontend
-      - "7861:7861"  # Agent Playground
       - "8888:8888"  # Jupyter
     volumes:
-      - ./models:/app/models
-      - ./cache:/app/cache
-      - ./agents:/app/agents
-      - ./tools:/app/tools
-    command: python -m api.server
+      - F:/llm/models:/app/models
+      - F:/llm/cache:/app/cache
+    command: python /app/frontend/gradio_frontend.py
     deploy:
       resources:
         reservations:

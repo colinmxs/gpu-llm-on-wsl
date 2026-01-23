@@ -55,23 +55,23 @@ RUN pip install --no-cache-dir \
 
 # Create working directory and model cache directory
 WORKDIR /app
-RUN mkdir -p /app/models /app/cache /app/agents /app/tools
-
-# Install API dependencies
-COPY api/requirements.txt /tmp/api-requirements.txt
-RUN pip install --no-cache-dir -r /tmp/api-requirements.txt
-COPY api /app/api
+RUN mkdir -p /app/models /app/cache
 
 # Install Notebook dependencies
 COPY notebooks/requirements.txt /tmp/notebooks-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/notebooks-requirements.txt
 COPY notebooks /app/notebooks
 
+# Install Frontend dependencies
+COPY frontend/requirements.txt /tmp/frontend-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/frontend-requirements.txt
+COPY frontend /app/frontend
+
 # Set Hugging Face cache directory
 ENV HF_HOME=/app/cache
 
-# Expose common ports (Jupyter: 8888, Gradio: 7860, Agent Playground: 7861, FastAPI: 8000)
-EXPOSE 8888 7860 7861 8000
+# Expose common ports (Jupyter: 8888, Gradio: 7860)
+EXPOSE 8888 7860
 
 # Set the default command
 CMD ["/bin/bash"]
