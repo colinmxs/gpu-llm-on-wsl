@@ -15,8 +15,8 @@ services:
       - "7860:7860"  # Gradio Frontend
       - "8888:8888"  # Jupyter
     volumes:
-      - F:/llm/models:/app/models
-      - F:/llm/cache:/app/cache
+      - ~/hugging-face/models:/app/models
+      - ~/hugging-face/cache:/app/cache
     command: python /app/frontend/gradio_frontend.py
     deploy:
       resources:
